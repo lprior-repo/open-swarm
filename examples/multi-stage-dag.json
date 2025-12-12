@@ -1,0 +1,379 @@
+{
+  "id": "multi-stage-dag-workflow",
+  "name": "Multi-Stage Feature Development DAG",
+  "description": "A complex DAG workflow with multiple parallel and sequential stages for full feature development, testing, and deployment",
+  "version": "1.0",
+  "type": "dag",
+  "metadata": {
+    "author": "Open Swarm",
+    "created": "2025-12-12",
+    "tags": ["dag", "ci-cd", "advanced", "parallel"],
+    "complexity": "advanced"
+  },
+  "workflow": {
+    "stages": [
+      {
+        "stage_id": "setup",
+        "stage_name": "Setup and Preparation",
+        "description": "Initialize workspace, checkout code, and fetch dependencies",
+        "type": "sequential",
+        "tasks": [
+          {
+            "task_id": "checkout",
+            "name": "Checkout Code",
+            "description": "Checkout feature branch",
+            "type": "setup",
+            "config": {
+              "branch": "feature/new-feature",
+              "fallback_branch": "main"
+            }
+          },
+          {
+            "task_id": "deps",
+            "name": "Download Dependencies",
+            "description": "Fetch all Go module dependencies",
+            "type": "setup",
+            "config": {
+              "command": "go mod download && go mod verify"
+            }
+          }
+        ]
+      },
+      {
+        "stage_id": "development",
+        "stage_name": "Feature Development",
+        "description": "Parallel development of multiple feature components",
+        "type": "parallel",
+        "depends_on": ["setup"],
+        "tasks": [
+          {
+            "task_id": "backend_api",
+            "name": "Implement Backend API",
+            "description": "Develop API endpoints and handlers",
+            "type": "feature",
+            "config": {
+              "prompt": "Implement RESTful API endpoints for feature management in pkg/api/handlers.go with proper error handling",
+              "timeout_seconds": 600,
+              "file_pattern": "pkg/api/**/*.go"
+            }
+          },
+          {
+            "task_id": "data_layer",
+            "name": "Implement Data Layer",
+            "description": "Develop database models and operations",
+            "type": "feature",
+            "config": {
+              "prompt": "Implement database models and CRUD operations in pkg/db/models.go with migrations",
+              "timeout_seconds": 600,
+              "file_pattern": "pkg/db/**/*.go"
+            }
+          },
+          {
+            "task_id": "service_logic",
+            "name": "Implement Service Logic",
+            "description": "Develop core business logic",
+            "type": "feature",
+            "config": {
+              "prompt": "Implement business logic and service methods in pkg/service/feature.go",
+              "timeout_seconds": 600,
+              "file_pattern": "pkg/service/**/*.go"
+            }
+          }
+        ]
+      },
+      {
+        "stage_id": "integration",
+        "stage_name": "Integration",
+        "description": "Integrate components and verify interactions",
+        "type": "sequential",
+        "depends_on": ["development"],
+        "tasks": [
+          {
+            "task_id": "wire_components",
+            "name": "Wire Components",
+            "description": "Connect API, service, and data layers",
+            "type": "integration",
+            "config": {
+              "command": "go build ./cmd/open-swarm",
+              "timeout_seconds": 120
+            }
+          },
+          {
+            "task_id": "integration_test",
+            "name": "Integration Tests",
+            "description": "Test component interactions",
+            "type": "test",
+            "config": {
+              "command": "go test -v ./internal/integration/...",
+              "timeout_seconds": 300,
+              "tags": ["integration"]
+            }
+          }
+        ]
+      },
+      {
+        "stage_id": "quality_check",
+        "stage_name": "Quality Assurance",
+        "description": "Comprehensive quality checks in parallel",
+        "type": "parallel",
+        "depends_on": ["integration"],
+        "tasks": [
+          {
+            "task_id": "unit_tests",
+            "name": "Unit Tests",
+            "description": "Run all unit tests",
+            "type": "test",
+            "config": {
+              "command": "go test -v -race -coverprofile=coverage.out ./...",
+              "timeout_seconds": 300,
+              "coverage_threshold": 80
+            }
+          },
+          {
+            "task_id": "lint_check",
+            "name": "Code Quality",
+            "description": "Static analysis and linting",
+            "type": "quality",
+            "config": {
+              "steps": [
+                {
+                  "name": "Format Check",
+                  "command": "gofmt -l ."
+                },
+                {
+                  "name": "Vet",
+                  "command": "go vet ./..."
+                },
+                {
+                  "name": "Lint",
+                  "command": "golangci-lint run"
+                }
+              ]
+            }
+          },
+          {
+            "task_id": "security_scan",
+            "name": "Security Scan",
+            "description": "Check for security vulnerabilities",
+            "type": "security",
+            "config": {
+              "command": "go list -json -m all | nancy sleuth",
+              "fail_on_vulnerability": true
+            }
+          },
+          {
+            "task_id": "benchmark",
+            "name": "Performance Benchmark",
+            "description": "Run performance benchmarks",
+            "type": "performance",
+            "config": {
+              "command": "go test -bench=. -benchmem ./pkg/...",
+              "timeout_seconds": 120,
+              "compare_against": "main"
+            }
+          }
+        ]
+      },
+      {
+        "stage_id": "documentation",
+        "stage_name": "Documentation",
+        "description": "Generate and validate documentation",
+        "type": "sequential",
+        "depends_on": ["quality_check"],
+        "tasks": [
+          {
+            "task_id": "generate_docs",
+            "name": "Generate API Docs",
+            "description": "Create API documentation from code",
+            "type": "documentation",
+            "config": {
+              "generator": "godoc",
+              "output_dir": "docs/api"
+            }
+          },
+          {
+            "task_id": "examples",
+            "name": "Create Usage Examples",
+            "description": "Generate usage examples and tutorials",
+            "type": "documentation",
+            "config": {
+              "template": "examples/template.md",
+              "output_dir": "docs/examples"
+            }
+          }
+        ]
+      },
+      {
+        "stage_id": "deployment_prep",
+        "stage_name": "Deployment Preparation",
+        "description": "Prepare for deployment and create artifacts",
+        "type": "sequential",
+        "depends_on": ["documentation"],
+        "tasks": [
+          {
+            "task_id": "build_release",
+            "name": "Build Release Binary",
+            "description": "Create optimized release build",
+            "type": "build",
+            "config": {
+              "command": "go build -ldflags='-s -w' -o bin/open-swarm-release ./cmd/open-swarm",
+              "timeout_seconds": 120
+            }
+          },
+          {
+            "task_id": "create_changelog",
+            "name": "Generate Changelog",
+            "description": "Create changelog for release",
+            "type": "documentation",
+            "config": {
+              "compare_branches": ["main", "feature/new-feature"]
+            }
+          },
+          {
+            "task_id": "version_bump",
+            "name": "Bump Version",
+            "description": "Update version numbers",
+            "type": "release",
+            "config": {
+              "files": ["go.mod", "pkg/version/version.go"],
+              "version_strategy": "semantic"
+            }
+          }
+        ]
+      },
+      {
+        "stage_id": "reporting",
+        "stage_name": "Final Reporting",
+        "description": "Generate final reports and summaries",
+        "type": "sequential",
+        "depends_on": ["deployment_prep"],
+        "tasks": [
+          {
+            "task_id": "coverage_report",
+            "name": "Coverage Report",
+            "description": "Generate HTML coverage report",
+            "type": "report",
+            "config": {
+              "command": "go tool cover -html=coverage.out -o docs/coverage.html"
+            }
+          },
+          {
+            "task_id": "final_summary",
+            "name": "Build Summary",
+            "description": "Create comprehensive build summary",
+            "type": "report",
+            "config": {
+              "include": [
+                "build_status",
+                "test_results",
+                "coverage_percentage",
+                "quality_score",
+                "security_findings",
+                "performance_metrics",
+                "artifacts_generated"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "dependencies": {
+      "setup": [],
+      "development": ["setup"],
+      "integration": ["development"],
+      "quality_check": ["integration"],
+      "documentation": ["quality_check"],
+      "deployment_prep": ["documentation"],
+      "reporting": ["deployment_prep"]
+    },
+    "failure_handling": {
+      "strategy": "fast_fail_with_reporting",
+      "on_failure": {
+        "collect_logs": true,
+        "generate_report": true,
+        "notify_stakeholders": true
+      },
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff": "exponential",
+        "timeout_seconds": 30
+      }
+    }
+  },
+  "agents": [
+    {
+      "id": "backend-dev",
+      "role": "backend_developer",
+      "stages": ["development"],
+      "subtasks": ["backend_api", "data_layer"],
+      "resources": {
+        "memory_mb": 1024,
+        "cpu_cores": 2,
+        "timeout_minutes": 20
+      }
+    },
+    {
+      "id": "service-dev",
+      "role": "service_developer",
+      "stages": ["development"],
+      "subtasks": ["service_logic"],
+      "resources": {
+        "memory_mb": 768,
+        "cpu_cores": 2,
+        "timeout_minutes": 20
+      }
+    },
+    {
+      "id": "qa-agent",
+      "role": "qa_engineer",
+      "stages": ["integration", "quality_check"],
+      "resources": {
+        "memory_mb": 1024,
+        "cpu_cores": 4,
+        "timeout_minutes": 30
+      }
+    },
+    {
+      "id": "release-agent",
+      "role": "release_manager",
+      "stages": ["documentation", "deployment_prep", "reporting"],
+      "resources": {
+        "memory_mb": 512,
+        "cpu_cores": 2,
+        "timeout_minutes": 15
+      }
+    }
+  ],
+  "parallelization": {
+    "max_parallel_agents": 4,
+    "max_parallel_tasks_per_stage": 4,
+    "allow_stage_parallelization": true
+  },
+  "expected_artifacts": {
+    "binaries": [
+      "bin/open-swarm",
+      "bin/open-swarm-release"
+    ],
+    "reports": [
+      "docs/coverage.html",
+      "docs/api/index.html",
+      "build-report.md"
+    ],
+    "source_changes": [
+      "pkg/api/**/*.go",
+      "pkg/db/**/*.go",
+      "pkg/service/**/*.go"
+    ]
+  },
+  "notifications": {
+    "on_stage_complete": "optional",
+    "on_failure": "required",
+    "on_success": "optional",
+    "channels": ["mail", "slack"]
+  },
+  "estimations": {
+    "sequential_time_minutes": 60,
+    "parallel_time_minutes": 35,
+    "total_estimated_minutes": 35
+  }
+}

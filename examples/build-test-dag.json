@@ -1,0 +1,191 @@
+{
+  "id": "build-test-dag-workflow",
+  "name": "Build and Test DAG Workflow",
+  "description": "A simple directed acyclic graph (DAG) workflow that executes build and test stages sequentially",
+  "version": "1.0",
+  "type": "dag",
+  "metadata": {
+    "author": "Open Swarm",
+    "created": "2025-12-12",
+    "tags": ["dag", "ci", "intermediate"],
+    "complexity": "intermediate"
+  },
+  "workflow": {
+    "stages": [
+      {
+        "stage_id": "prepare",
+        "stage_name": "Prepare Workspace",
+        "description": "Initialize workspace and fetch dependencies",
+        "type": "sequential",
+        "tasks": [
+          {
+            "task_id": "checkout",
+            "name": "Checkout Code",
+            "description": "Checkout main branch",
+            "type": "setup",
+            "actions": [
+              {
+                "action": "git_checkout",
+                "branch": "main"
+              }
+            ]
+          },
+          {
+            "task_id": "dependencies",
+            "name": "Fetch Dependencies",
+            "description": "Download Go module dependencies",
+            "type": "setup",
+            "actions": [
+              {
+                "action": "run_command",
+                "command": "go mod download"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "stage_id": "build",
+        "stage_name": "Build",
+        "description": "Build application binaries",
+        "type": "sequential",
+        "depends_on": ["prepare"],
+        "tasks": [
+          {
+            "task_id": "build_main",
+            "name": "Build Main Binary",
+            "description": "Compile main application",
+            "type": "build",
+            "config": {
+              "command": "go build -o bin/open-swarm ./cmd/open-swarm",
+              "timeout_seconds": 120
+            }
+          },
+          {
+            "task_id": "build_lint",
+            "name": "Code Quality Check",
+            "description": "Format and lint code",
+            "type": "quality",
+            "config": {
+              "steps": [
+                {
+                  "name": "Format",
+                  "command": "gofmt -d ."
+                },
+                {
+                  "name": "Lint",
+                  "command": "go vet ./..."
+                }
+              ],
+              "fail_on_warnings": false
+            }
+          }
+        ]
+      },
+      {
+        "stage_id": "test",
+        "stage_name": "Test",
+        "description": "Run unit and integration tests",
+        "type": "sequential",
+        "depends_on": ["build"],
+        "tasks": [
+          {
+            "task_id": "unit_tests",
+            "name": "Unit Tests",
+            "description": "Run unit test suite",
+            "type": "test",
+            "config": {
+              "command": "go test -v -race -coverprofile=coverage.out ./...",
+              "timeout_seconds": 300,
+              "expected_result": "PASS"
+            }
+          },
+          {
+            "task_id": "coverage",
+            "name": "Check Coverage",
+            "description": "Verify test coverage threshold",
+            "type": "quality",
+            "config": {
+              "command": "go tool cover -func=coverage.out | grep total | awk '{print $3}'",
+              "min_coverage_percent": 70,
+              "timeout_seconds": 60
+            }
+          }
+        ]
+      },
+      {
+        "stage_id": "report",
+        "stage_name": "Generate Report",
+        "description": "Create build artifacts and reports",
+        "type": "sequential",
+        "depends_on": ["test"],
+        "tasks": [
+          {
+            "task_id": "coverage_report",
+            "name": "Generate Coverage Report",
+            "description": "Create HTML coverage report",
+            "type": "report",
+            "actions": [
+              {
+                "action": "run_command",
+                "command": "go tool cover -html=coverage.out -o coverage.html"
+              }
+            ]
+          },
+          {
+            "task_id": "summary",
+            "name": "Build Summary",
+            "description": "Create build summary",
+            "type": "report",
+            "actions": [
+              {
+                "action": "generate_summary",
+                "include": ["build_time", "test_count", "coverage_percentage", "artifact_size"]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "failure_handling": {
+      "strategy": "fast_fail",
+      "on_build_failure": "halt_pipeline",
+      "on_test_failure": "collect_and_report"
+    }
+  },
+  "agents": [
+    {
+      "id": "builder-agent",
+      "role": "build_executor",
+      "stages": ["prepare", "build", "test"],
+      "resources": {
+        "memory_mb": 1024,
+        "cpu_cores": 2,
+        "timeout_minutes": 15
+      }
+    },
+    {
+      "id": "reporter-agent",
+      "role": "report_generator",
+      "stages": ["report"],
+      "resources": {
+        "memory_mb": 256,
+        "cpu_cores": 1,
+        "timeout_minutes": 5
+      }
+    }
+  ],
+  "parallelization": {
+    "max_parallel_tasks_per_stage": 1,
+    "allow_stage_parallelization": false
+  },
+  "expected_artifacts": {
+    "binaries": ["bin/open-swarm"],
+    "reports": ["coverage.html"],
+    "logs": ["build.log", "test.log"]
+  },
+  "notifications": {
+    "on_success": "optional",
+    "on_failure": "required"
+  }
+}
