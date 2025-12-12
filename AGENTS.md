@@ -25,6 +25,16 @@ Exception: Non-code files (`.md`, `.json`, `.yaml`) use Edit tool.
 - No proactive documentation
 - User will ask if needed
 
+### 🔴 RULE #4: TDD IS MANDATORY
+**ALL Go code changes follow Test-Driven Development.**
+- Test file must exist BEFORE implementation
+- Test must fail first (RED)
+- Minimal implementation makes test pass (GREEN)
+- Use testify for assertions
+- Tests must be atomic, small, deterministic
+
+Validate with: `validateTDD filePath="internal/api/handler.go"`
+
 ### ✅ Workflow
 1. Get/Create Beads task → `bd create` or `bd ready --json`
 2. Start task → `bd update task-id --status in_progress`
