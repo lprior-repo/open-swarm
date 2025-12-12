@@ -7,12 +7,17 @@ import (
 
 	"open-swarm/internal/agent"
 	"open-swarm/internal/infra"
+
+	"github.com/sst/opencode-sdk-go"
 )
 
 // Mock implementations for testing
 type mockPortManager struct {
-	allocateFunc func() (int, error)
-	releaseFunc  func(port int) error
+	allocateFunc    func() (int, error)
+	releaseFunc     func(port int) error
+	allocatedCount  int
+	availableCount  int
+	isAllocatedFunc func(port int) bool
 }
 
 func (m *mockPortManager) Allocate() (int, error) {
@@ -27,6 +32,21 @@ func (m *mockPortManager) Release(port int) error {
 		return m.releaseFunc(port)
 	}
 	return nil
+}
+
+func (m *mockPortManager) AllocatedCount() int {
+	return m.allocatedCount
+}
+
+func (m *mockPortManager) AvailableCount() int {
+	return m.availableCount
+}
+
+func (m *mockPortManager) IsAllocated(port int) bool {
+	if m.isAllocatedFunc != nil {
+		return m.isAllocatedFunc(port)
+	}
+	return false
 }
 
 type mockServerManager struct {
@@ -61,8 +81,11 @@ func (m *mockServerManager) IsHealthy(handle *infra.ServerHandle) bool {
 }
 
 type mockWorktreeManager struct {
-	createFunc func(id, branch string) (*infra.WorktreeInfo, error)
-	removeFunc func(id string) error
+	createFunc  func(id, branch string) (*infra.WorktreeInfo, error)
+	removeFunc  func(id string) error
+	listFunc    func() ([]*infra.WorktreeInfo, error)
+	pruneFunc   func() error
+	cleanupFunc func() error
 }
 
 func (m *mockWorktreeManager) CreateWorktree(id, branch string) (*infra.WorktreeInfo, error) {
@@ -82,13 +105,38 @@ func (m *mockWorktreeManager) RemoveWorktree(id string) error {
 	return nil
 }
 
-type mockClient struct {
-	executeFunc func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error)
+func (m *mockWorktreeManager) ListWorktrees() ([]*infra.WorktreeInfo, error) {
+	if m.listFunc != nil {
+		return m.listFunc()
+	}
+	return []*infra.WorktreeInfo{}, nil
 }
 
-func (m *mockClient) ExecuteCommand(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
-	if m.executeFunc != nil {
-		return m.executeFunc(ctx, sessionID, command, args)
+func (m *mockWorktreeManager) PruneWorktrees() error {
+	if m.pruneFunc != nil {
+		return m.pruneFunc()
+	}
+	return nil
+}
+
+func (m *mockWorktreeManager) CleanupAll() error {
+	if m.cleanupFunc != nil {
+		return m.cleanupFunc()
+	}
+	return nil
+}
+
+type mockClient struct {
+	executePromptFunc  func(ctx context.Context, prompt string, opts *agent.PromptOptions) (*agent.PromptResult, error)
+	executeCommandFunc func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error)
+	getFileStatusFunc  func(ctx context.Context) ([]opencode.File, error)
+	baseURL            string
+	port               int
+}
+
+func (m *mockClient) ExecutePrompt(ctx context.Context, prompt string, opts *agent.PromptOptions) (*agent.PromptResult, error) {
+	if m.executePromptFunc != nil {
+		return m.executePromptFunc(ctx, prompt, opts)
 	}
 	return &agent.PromptResult{
 		SessionID: "test-session",
@@ -97,6 +145,40 @@ func (m *mockClient) ExecuteCommand(ctx context.Context, sessionID string, comma
 			{Type: "text", Text: "success"},
 		},
 	}, nil
+}
+
+func (m *mockClient) ExecuteCommand(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
+	if m.executeCommandFunc != nil {
+		return m.executeCommandFunc(ctx, sessionID, command, args)
+	}
+	return &agent.PromptResult{
+		SessionID: "test-session",
+		MessageID: "test-message",
+		Parts: []agent.ResultPart{
+			{Type: "text", Text: "success"},
+		},
+	}, nil
+}
+
+func (m *mockClient) GetFileStatus(ctx context.Context) ([]opencode.File, error) {
+	if m.getFileStatusFunc != nil {
+		return m.getFileStatusFunc(ctx)
+	}
+	return []opencode.File{}, nil
+}
+
+func (m *mockClient) GetBaseURL() string {
+	if m.baseURL != "" {
+		return m.baseURL
+	}
+	return "http://localhost:8080"
+}
+
+func (m *mockClient) GetPort() int {
+	if m.port != 0 {
+		return m.port
+	}
+	return 8080
 }
 
 // Tests for BootstrapCell
@@ -314,12 +396,16 @@ func TestTeardownCell_PartialFailure(t *testing.T) {
 // Tests for ExecuteTask
 func TestExecuteTask_Success(t *testing.T) {
 	client := &mockClient{
-		executeFunc: func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
+		executePromptFunc: func(ctx context.Context, prompt string, opts *agent.PromptOptions) (*agent.PromptResult, error) {
 			return &agent.PromptResult{
+				SessionID: "test-session",
 				Parts: []agent.ResultPart{
 					{Type: "text", Text: "Task completed successfully"},
 				},
 			}, nil
+		},
+		getFileStatusFunc: func(ctx context.Context) ([]opencode.File, error) {
+			return []opencode.File{}, nil
 		},
 	}
 
@@ -377,23 +463,19 @@ func TestExecuteTask_UnhealthyServer(t *testing.T) {
 		Prompt: "Test task",
 	}
 
-	result, err := activities.ExecuteTask(context.Background(), cell, task)
-	if err != nil {
-		t.Fatalf("ExecuteTask failed: %v", err)
+	_, err := activities.ExecuteTask(context.Background(), cell, task)
+	if err == nil {
+		t.Fatal("Expected error when server is unhealthy")
 	}
-
-	if result.Success {
-		t.Error("Task should fail with unhealthy server")
-	}
-	if result.ErrorMessage == "" {
-		t.Error("Error message should be set")
+	if err.Error() != "server is not healthy" {
+		t.Errorf("Unexpected error message: %v", err)
 	}
 }
 
 // Tests for RunTests
 func TestRunTests_Pass(t *testing.T) {
 	client := &mockClient{
-		executeFunc: func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
+		executeCommandFunc: func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
 			return &agent.PromptResult{
 				Parts: []agent.ResultPart{
 					{Type: "text", Text: "PASS\nok  \tpackage\t0.001s"},
@@ -425,7 +507,7 @@ func TestRunTests_Pass(t *testing.T) {
 
 func TestRunTests_Fail(t *testing.T) {
 	client := &mockClient{
-		executeFunc: func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
+		executeCommandFunc: func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
 			return &agent.PromptResult{
 				Parts: []agent.ResultPart{
 					{Type: "text", Text: "FAIL\nFAIL\tpackage\t0.001s"},
@@ -459,7 +541,7 @@ func TestRunTests_Fail(t *testing.T) {
 func TestCommitChanges_Success(t *testing.T) {
 	commitCalled := false
 	client := &mockClient{
-		executeFunc: func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
+		executeCommandFunc: func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
 			if len(args) > 0 && args[0] == "git" {
 				commitCalled = true
 			}
@@ -496,7 +578,7 @@ func TestCommitChanges_Success(t *testing.T) {
 func TestRevertChanges_Success(t *testing.T) {
 	revertCalled := false
 	client := &mockClient{
-		executeFunc: func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
+		executeCommandFunc: func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
 			if len(args) > 0 && args[0] == "git" {
 				revertCalled = true
 			}

@@ -16,13 +16,13 @@ import (
 
 // Activities contains all workflow activities
 type Activities struct {
-	portManager     *infra.PortManager
-	serverManager   *infra.ServerManager
-	worktreeManager *infra.WorktreeManager
+	portManager     infra.PortManagerInterface
+	serverManager   infra.ServerManagerInterface
+	worktreeManager infra.WorktreeManagerInterface
 }
 
 // NewActivities creates a new Activities instance
-func NewActivities(portMgr *infra.PortManager, serverMgr *infra.ServerManager, worktreeMgr *infra.WorktreeManager) *Activities {
+func NewActivities(portMgr infra.PortManagerInterface, serverMgr infra.ServerManagerInterface, worktreeMgr infra.WorktreeManagerInterface) *Activities {
 	return &Activities{
 		portManager:     portMgr,
 		serverManager:   serverMgr,
@@ -37,7 +37,7 @@ type CellBootstrap struct {
 	WorktreeID   string
 	WorktreePath string
 	ServerHandle *infra.ServerHandle
-	Client       *agent.Client
+	Client       agent.ClientInterface
 }
 
 // BootstrapCell creates a complete isolated cell for agent execution

@@ -5,6 +5,12 @@
 
 package agent
 
+import (
+	"context"
+
+	"github.com/sst/opencode-sdk-go"
+)
+
 // PromptOptions configures how a prompt is executed
 type PromptOptions struct {
 	// SessionID to use (if empty, creates new session)
@@ -82,4 +88,22 @@ type ExecutionResult struct {
 	TestsPassed   bool
 	ErrorMessage  string
 	SessionID     string
+}
+
+// ClientInterface defines the interface for OpenCode SDK client operations
+type ClientInterface interface {
+	// ExecutePrompt sends a prompt to the OpenCode server and returns the response
+	ExecutePrompt(ctx context.Context, prompt string, opts *PromptOptions) (*PromptResult, error)
+
+	// ExecuteCommand executes a command (slash command) on the OpenCode server
+	ExecuteCommand(ctx context.Context, sessionID string, command string, args []string) (*PromptResult, error)
+
+	// GetFileStatus retrieves the status of tracked files
+	GetFileStatus(ctx context.Context) ([]opencode.File, error)
+
+	// GetBaseURL returns the base URL this client is connected to
+	GetBaseURL() string
+
+	// GetPort returns the port this client is connected to
+	GetPort() int
 }

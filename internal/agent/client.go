@@ -13,6 +13,9 @@ import (
 	"github.com/sst/opencode-sdk-go/option"
 )
 
+// Ensure Client implements ClientInterface
+var _ ClientInterface = (*Client)(nil)
+
 // Client wraps the OpenCode SDK client with reactor-specific functionality
 // Enforces INV-004: SDK Client must be configured with specific BaseURL (localhost:PORT)
 // Enforces INV-006: Command execution must use SDK 'client.Command.Execute'
