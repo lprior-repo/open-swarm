@@ -2,7 +2,6 @@ package temporal
 
 import (
 	"context"
-	"fmt"
 
 	"go.temporal.io/sdk/activity"
 
