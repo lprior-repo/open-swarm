@@ -1,0 +1,238 @@
+/**
+ * TDD Enforcer Plugin for OpenCode
+ * 
+ * Enforces Test-Driven Development practices by monitoring file edits and ensuring:
+ * 1. Test files exist BEFORE implementation files
+ * 2. Tests use testify assertions
+ * 3. Tests are written and validated following RED-GREEN-REFACTOR cycle
+ * 
+ * Based on Open Swarm's TDD requirements from AGENTS.md
+ */
+
+import type { Plugin } from "@opencode-ai/plugin"
+import { existsSync } from "fs"
+import { readFile } from "fs/promises"
+
+interface TDDState {
+  testFile: string
+  implFile: string
+  testExists: boolean
+  usesTestify: boolean
+  lastModified: number
+}
+
+export const TDDEnforcerPlugin: Plugin = async ({ directory, client }) => {
+  const tddStates = new Map<string, TDDState>()
+  let sessionStats = {
+    testsWritten: 0,
+    implsWritten: 0,
+    violations: 0,
+    warnings: 0
+  }
+  
+  /**
+   * Get the corresponding test file for an implementation file
+   */
+  const getTestFile = (implFile: string): string => {
+    if (implFile.endsWith("_test.go")) {
+      return implFile
+    }
+    return implFile.replace(/\.go$/, "_test.go")
+  }
+
+  /**
+   * Get the implementation file for a test file
+   */
+  const getImplFile = (testFile: string): string => {
+    return testFile.replace(/_test\.go$/, ".go")
+  }
+
+  /**
+   * Check if a file is a Go test file
+   */
+  const isTestFile = (filePath: string): boolean => {
+    return filePath.endsWith("_test.go")
+  }
+
+  /**
+   * Check if a file is a Go implementation file (not test)
+   */
+  const isImplFile = (filePath: string): boolean => {
+    return filePath.endsWith(".go") && !filePath.endsWith("_test.go")
+  }
+
+  /**
+   * Validate that test file uses testify
+   */
+  const validateTestifyUsage = async (testFile: string): Promise<boolean> => {
+    try {
+      const fullPath = testFile.startsWith('/') ? testFile : `${directory}/${testFile}`
+      const content = await readFile(fullPath, "utf-8")
+      return content.includes("github.com/stretchr/testify")
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Show TDD violation notification
+   */
+  const showViolation = async (message: string) => {
+    sessionStats.violations++
+    await client.tui.showToast({
+      body: {
+        message: `🔴 TDD Violation: ${message}`,
+        variant: "error"
+      }
+    })
+  }
+
+  /**
+   * Show TDD warning notification
+   */
+  const showWarning = async (message: string) => {
+    sessionStats.warnings++
+    await client.tui.showToast({
+      body: {
+        message: `⚠️  TDD Warning: ${message}`,
+        variant: "warning"
+      }
+    })
+  }
+
+  /**
+   * Show TDD success notification
+   */
+  const showSuccess = async (message: string) => {
+    await client.tui.showToast({
+      body: {
+        message: `✅ TDD: ${message}`,
+        variant: "success"
+      }
+    })
+  }
+
+  console.log("[TDD Enforcer] Plugin initialized - monitoring Go file edits")
+
+  return {
+    /**
+     * Main event handler - processes all OpenCode events
+     */
+    event: async ({ event }) => {
+      // Session lifecycle events
+      if (event.type === "session.created") {
+        console.log("[TDD Enforcer] New session - TDD enforcement active")
+        sessionStats = { testsWritten: 0, implsWritten: 0, violations: 0, warnings: 0 }
+        
+        await client.tui.showToast({
+          body: {
+            message: "🧪 TDD Enforcer: Write tests BEFORE implementation",
+            variant: "info"
+          }
+        })
+      }
+
+      if (event.type === "session.idle") {
+        if (sessionStats.testsWritten > 0 || sessionStats.implsWritten > 0) {
+          const summary = `TDD Session: ${sessionStats.testsWritten} tests, ${sessionStats.implsWritten} implementations`
+          const status = sessionStats.violations === 0 ? "✅ No violations" : `${sessionStats.violations} violations`
+          
+          console.log(`[TDD Enforcer] ${summary} | ${status}`)
+          
+          await client.tui.showToast({
+            body: {
+              message: `${summary} | ${status}`,
+              variant: sessionStats.violations === 0 ? "success" : "warning"
+            }
+          })
+        }
+
+        // Clear state for next session
+        tddStates.clear()
+        sessionStats = { testsWritten: 0, implsWritten: 0, violations: 0, warnings: 0 }
+      }
+
+      // File edit events
+      if (event.type === "file.edited") {
+        const filePath = event.properties.file
+        
+        // Only process Go files
+        if (!filePath || !filePath.endsWith(".go")) {
+          return
+        }
+
+        // CASE 1: Test file edited
+        if (isTestFile(filePath)) {
+          console.log(`[TDD Enforcer] Test file edited: ${filePath}`)
+          sessionStats.testsWritten++
+          
+          const implFile = getImplFile(filePath)
+          const fullImplPath = implFile.startsWith('/') ? implFile : `${directory}/${implFile}`
+          
+          // Check if test uses testify
+          const usesTestify = await validateTestifyUsage(filePath)
+          if (!usesTestify) {
+            await showWarning(`${filePath} should use testify assertions`)
+          }
+          
+          // Update state
+          tddStates.set(filePath, {
+            testFile: filePath,
+            implFile: implFile,
+            testExists: true,
+            usesTestify: usesTestify,
+            lastModified: Date.now()
+          })
+          
+          // If implementation already exists, remind about TDD
+          if (existsSync(fullImplPath)) {
+            console.log(`[TDD Enforcer] Implementation ${implFile} already exists`)
+          } else {
+            await showSuccess(`Test written first - following TDD! ✨`)
+          }
+        }
+
+        // CASE 2: Implementation file edited
+        if (isImplFile(filePath)) {
+          console.log(`[TDD Enforcer] Implementation file edited: ${filePath}`)
+          sessionStats.implsWritten++
+          
+          const testFile = getTestFile(filePath)
+          const fullTestPath = testFile.startsWith('/') ? testFile : `${directory}/${testFile}`
+
+          // RULE: Test file should exist first
+          if (!existsSync(fullTestPath)) {
+            await showViolation(`${testFile} does not exist - write tests FIRST!`)
+            console.error(`[TDD Enforcer] VIOLATION: Implementation ${filePath} created before test`)
+            
+            await client.app.log({
+              body: {
+                service: "tdd-enforcer",
+                message: `TDD VIOLATION: ${filePath} created without test file ${testFile}`,
+                level: "error"
+              }
+            })
+          } else {
+            // Test exists - check if it uses testify
+            const state = tddStates.get(testFile)
+            if (state) {
+              if (!state.usesTestify) {
+                await showWarning(`Test exists but doesn't use testify`)
+              } else {
+                console.log(`[TDD Enforcer] ✅ Test-first development - good job!`)
+              }
+            } else {
+              // Test file exists but wasn't tracked (maybe from before session)
+              const usesTestify = await validateTestifyUsage(testFile)
+              if (!usesTestify) {
+                await showWarning(`${testFile} should use testify`)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+export default TDDEnforcerPlugin;

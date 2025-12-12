@@ -1,18 +1,26 @@
 import { tool } from "@opencode-ai/plugin"
 import { $ } from "bun"
 import { existsSync } from "fs"
-import { join, dirname, basename } from "path"
+import { dirname } from "path"
 
 /**
- * TDD Guard - Enforces Test-Driven Development workflow
+ * TDD Enforcer - Enforces Test-Driven Development workflow for Go projects
  * 
- * Validates:
+ * This OpenCode plugin provides tools to validate TDD practices:
  * 1. Test file exists before implementation
- * 2. Test fails initially (Red)
- * 3. Implementation makes test pass (Green)
+ * 2. Test fails initially (Red phase)
+ * 3. Implementation makes test pass (Green phase)
  * 4. Test is atomic, small, and deterministic
  * 5. Uses testify for assertions
  * 6. Full test suite passes
+ * 
+ * Usage:
+ * - tdd-enforcer_validateTDD: Validate full TDD workflow
+ * - tdd-enforcer_checkTestCoverage: Ensure minimum test coverage
+ * - tdd-enforcer_enforceTestFirst: Validate test-first development
+ * 
+ * @see https://opencode.ai/docs/custom-tools
+ * @see https://github.com/open-swarm project documentation
  */
 
 interface TDDValidationResult {
@@ -31,42 +39,55 @@ interface TDDValidationResult {
   }
 }
 
+function formatResult(result: TDDValidationResult): string {
+  return result.message
+}
+
+/**
+ * Validate TDD workflow for a Go implementation file
+ * 
+ * Checks:
+ * - Test file exists before implementation
+ * - Test uses testify assertions
+ * - Test is atomic and focused
+ * - Test fails initially (Red phase)
+ * - Test passes with implementation (Green phase)
+ * - Full test suite passes
+ */
 export const validateTDD = tool({
-  description: "Validate TDD workflow for a Go file change. Ensures test exists first, fails (Red), then passes (Green) with minimal implementation.",
+  description: "Validate TDD workflow for a Go file. Ensures test exists first, fails initially (Red), then passes with implementation (Green). Use before committing code changes.",
   args: {
     filePath: tool.schema.string().describe("Path to the Go implementation file (not the test file)"),
     skipRedCheck: tool.schema.boolean().optional().default(false).describe("Skip the Red phase check (test must fail first)")
   },
-  async execute(args): Promise<TDDValidationResult> {
+  async execute(args): Promise<string> {
     try {
       const implFile = args.filePath
       
       // Validate file is a Go file (not a test)
       if (!implFile.endsWith(".go")) {
-        return {
+        return formatResult({
           success: false,
           phase: "error",
           message: "File must be a .go file"
-        }
+        })
       }
 
       if (implFile.endsWith("_test.go")) {
-        return {
+        return formatResult({
           success: false,
           phase: "error",
           message: "Cannot validate test files directly. Provide the implementation file path."
-        }
+        })
       }
 
       // Determine test file path
       const testFile = implFile.replace(/\.go$/, "_test.go")
-      const dir = dirname(implFile)
-      const implBasename = basename(implFile, ".go")
 
       // PHASE 1: Check test file exists
       const testExists = existsSync(testFile)
       if (!testExists) {
-        return {
+        return formatResult({
           success: false,
           phase: "error",
           message: `❌ TDD VIOLATION: Test file must exist BEFORE implementation.\n\nExpected: ${testFile}\n\nCreate the test first following TDD workflow:\n1. Write failing test\n2. Implement minimal code to pass\n3. Refactor if needed`,
@@ -75,7 +96,7 @@ export const validateTDD = tool({
             testFile,
             testExists: false
           }
-        }
+        })
       }
 
       // PHASE 2: Check test uses testify
@@ -83,7 +104,7 @@ export const validateTDD = tool({
       const usesTestify = testContent.includes("github.com/stretchr/testify")
       
       if (!usesTestify) {
-        return {
+        return formatResult({
           success: false,
           phase: "error",
           message: `⚠️  Test should use testify for assertions.\n\nAdd: import "github.com/stretchr/testify/assert"`,
@@ -93,7 +114,7 @@ export const validateTDD = tool({
             testExists: true,
             usesTestify: false
           }
-        }
+        })
       }
 
       // PHASE 3: Check test is atomic (single test function, focused)
@@ -101,7 +122,7 @@ export const validateTDD = tool({
       const isAtomic = testFunctions.length <= 3 // Allow small number of focused tests
       
       if (!isAtomic) {
-        return {
+        return formatResult({
           success: false,
           phase: "error",
           message: `⚠️  Test file has ${testFunctions.length} test functions. Keep tests atomic and focused.\n\nBreak large test files into smaller, focused test files.`,
@@ -112,7 +133,7 @@ export const validateTDD = tool({
             usesTestify,
             isAtomic: false
           }
-        }
+        })
       }
 
       // PHASE 4: RED - Test must fail initially (unless skipped)
@@ -121,7 +142,7 @@ export const validateTDD = tool({
         const testFails = redResult.exitCode !== 0
 
         if (!testFails) {
-          return {
+          return formatResult({
             success: false,
             phase: "error",
             message: `❌ TDD VIOLATION: Test passes without implementation (RED phase failed).\n\nThe test must fail first to validate it's testing the right thing.\n\nEither:\n1. Your test isn't testing correctly\n2. Implementation already exists\n3. Test is not properly isolated`,
@@ -133,7 +154,7 @@ export const validateTDD = tool({
               isAtomic,
               testFails: false
             }
-          }
+          })
         }
       }
 
@@ -143,7 +164,7 @@ export const validateTDD = tool({
 
       if (!testPasses) {
         const output = greenResult.stderr.toString() || greenResult.stdout.toString()
-        return {
+        return formatResult({
           success: false,
           phase: "red",
           message: `🔴 RED: Test still failing.\n\nImplement minimal code to make test pass.\n\nTest output:\n${output.slice(0, 500)}`,
@@ -156,7 +177,7 @@ export const validateTDD = tool({
             testFails: true,
             testPasses: false
           }
-        }
+        })
       }
 
       // PHASE 6: Full test suite must pass
@@ -166,7 +187,7 @@ export const validateTDD = tool({
 
       if (!suitePasses) {
         const output = suiteResult.stderr.toString() || suiteResult.stdout.toString()
-        return {
+        return formatResult({
           success: false,
           phase: "green",
           message: `⚠️  Individual test passes but test suite has failures.\n\nFix failing tests in the package:\n${output.slice(0, 500)}`,
@@ -180,11 +201,11 @@ export const validateTDD = tool({
             testPasses: true,
             suitePasses: false
           }
-        }
+        })
       }
 
       // SUCCESS: All TDD phases validated
-      return {
+      return formatResult({
         success: true,
         phase: "green",
         message: `✅ TDD WORKFLOW VALIDATED\n\n✓ Test file exists: ${testFile}\n✓ Uses testify assertions\n✓ Test is atomic and focused\n${args.skipRedCheck ? '' : '✓ Test failed initially (RED)\n'}✓ Test passes with implementation (GREEN)\n✓ Full test suite passes\n\nReady to commit!`,
@@ -198,20 +219,26 @@ export const validateTDD = tool({
           testPasses: true,
           suitePasses: true
         }
-      }
+      })
 
     } catch (error) {
-      return {
+      return formatResult({
         success: false,
         phase: "error",
         message: `Error during TDD validation: ${error.message}`
-      }
+      })
     }
   }
 })
 
+/**
+ * Check test coverage for a Go package
+ * 
+ * Validates that test coverage meets minimum threshold (default: 80%)
+ * Useful for ensuring code quality and test completeness
+ */
 export const checkTestCoverage = tool({
-  description: "Check test coverage for a Go package and ensure it meets minimum threshold",
+  description: "Check test coverage for a Go package and ensure it meets minimum threshold (default: 80%). Returns coverage percentage and validation status.",
   args: {
     packagePath: tool.schema.string().describe("Package path (e.g., ./internal/api)"),
     minCoverage: tool.schema.number().optional().default(80).describe("Minimum coverage percentage (default: 80%)")
@@ -244,8 +271,14 @@ export const checkTestCoverage = tool({
   }
 })
 
+/**
+ * Enforce test-first development via git history
+ * 
+ * Validates that test files are modified/created before or with implementation
+ * Helps maintain TDD discipline across the team
+ */
 export const enforceTestFirst = tool({
-  description: "Enforce test-first development by checking git diff. Ensures test file was modified/created before or with the implementation file.",
+  description: "Enforce test-first development by validating git history. Ensures test file was modified/created before or with the implementation file. Use during code review.",
   args: {
     implFile: tool.schema.string().describe("Implementation file path")
   },

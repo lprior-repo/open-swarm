@@ -23,8 +23,7 @@
     "webfetch": true,
     "serena_*": true,
     "agent-mail_*": true,
-    "beads_*": true,
-    "tdd-guard_*": true
+    "beads_*": true
   },
 
   "permission": {
@@ -32,11 +31,16 @@
     "edit": "allow",
     "read": "allow",
     "bash": "allow",
+    "grep": "allow",
+    "glob": "allow",
+    "list": "allow",
     "webfetch": "allow",
+    "task": "allow",
+    "todowrite": "allow",
+    "todoread": "allow",
     "agent-mail_*": "allow",
     "beads_*": "allow",
-    "serena_*": "allow",
-    "tdd-guard_*": "allow"
+    "serena_*": "allow"
   },
 
   "formatter": {
@@ -74,6 +78,37 @@
         "BEADS_USE_DAEMON": "1",
         "BEADS_ACTOR": "opencode"
       },
+      "enabled": true,
+      "timeout": 30000
+    },
+    "sequential-thinking": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "enabled": true,
+      "timeout": 30000
+    },
+    "sequentialthinking-tools": {
+      "type": "local",
+      "command": ["npx", "-y", "mcp-sequentialthinking-tools"],
+      "environment": {
+        "MAX_HISTORY_SIZE": "1000"
+      },
+      "enabled": true,
+      "timeout": 30000
+    },
+    "chrome-devtools": {
+      "type": "local",
+      "command": ["npx", "chrome-devtools-mcp@latest"],
+      "enabled": true,
+      "timeout": 30000
+    },
+    "opencode-agent": {
+      "type": "local",
+      "command": [
+        "sh",
+        "-c",
+        "cd /home/lewis/src/opencode-mcp && /home/lewis/src/opencode-mcp/.venv/bin/python -m src.services.fast_mcp.opencode_server"
+      ],
       "enabled": true,
       "timeout": 30000
     }

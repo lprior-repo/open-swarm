@@ -1,0 +1,10 @@
+{
+  "session_id": "9386eca6-3351-495e-9f63-10f3f5e83cae",
+  "transcript_path": "/home/lewis/.claude/projects/-home-lewis-src-open-swarm/9386eca6-3351-495e-9f63-10f3f5e83cae.jsonl",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "/home/lewis/src/open-swarm/.opencode/plugin/tdd-enforcer-protection.ts",
+    "content": "/**\n * Self-protection utilities for TDD Enforcer Plugin\n */\n\nconst protectedPaths = [\n  'opencode.json',\n  '.opencode/plugin/tdd-enforcer',\n  '.opencode/tool/tdd-enforcer',\n  '.config/opencode',\n]\n\nexport function isProtectedPath(filePath: string): boolean {\n  if (!filePath || typeof filePath !== 'string') return false\n  const normalizedPath = filePath.toLowerCase().replace(/\\\\/g, '/')\n  return protectedPaths.some(p => normalizedPath.includes(p.toLowerCase()))\n}\n\nexport function isSuspiciousBashCommand(command: string): boolean {\n  if (!command) return false\n  const cmd = command.toLowerCase()\n\n  // Block deletion of test files\n  if (cmd.includes('rm') && cmd.includes('_test.go')) return true\n\n  // Block go build without tests\n  if (cmd.match(/go\\s+build/) && !cmd.includes('test')) return true\n\n  // Block moving/removing tdd-enforcer\n  if ((cmd.includes('mv') || cmd.includes('rm')) && cmd.includes('tdd-enforcer')) return true\n\n  return false\n}\n"
+  }
+}
