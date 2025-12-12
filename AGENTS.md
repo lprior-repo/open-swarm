@@ -21,6 +21,12 @@ If there is no Beads task ID (e.g., `open-swarm-xyz`), **DO NOT** make any chang
 
 **Exception:** Non-code files (`.md`, `.json`, `.yaml`) can use Edit tool.
 
+### 🔴 RULE #3: NEVER CREATE MARKDOWN FILES
+- **DO NOT** create README.md, CHANGELOG.md, or any .md files unless explicitly requested
+- **DO NOT** create documentation files proactively
+- **DO NOT** write markdown content in responses unless explicitly asked
+- User will request documentation if needed
+
 ### ✅ Correct Workflow (MANDATORY)
 1. **Get/Create Beads task** → `bd create` or `bd ready --json`
 2. **Start task** → `bd update task-id --status in_progress`
@@ -137,7 +143,14 @@ go tool cover -html=coverage.out
 
 **Exception:** Non-code files only (markdown, JSON, YAML, config files). Use Edit tool for those.
 
-#### Rule 3: Understand Before You Change
+#### Rule 3: Never Create Markdown Files
+**DO NOT create documentation files unless explicitly requested:**
+
+- No README.md, CHANGELOG.md, or any .md files
+- No proactive documentation generation
+- User will explicitly ask if documentation is needed
+
+#### Rule 4: Understand Before You Change
 **ALWAYS use Serena to understand code before modifying it:**
 
 1. **Find the symbol:** `serena_find_symbol: "FunctionName"`
@@ -801,3 +814,4 @@ Coordinate handoff or work on different files
 - ✅ **ALWAYS** reserve files before editing
 - ❌ **NEVER** edit code files directly without Serena
 - ❌ **NEVER** make code changes without a Beads task
+- ❌ **NEVER** create markdown files unless explicitly requested
