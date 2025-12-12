@@ -16,12 +16,12 @@ import (
 // TestDAGToposort tests the topological sorting of DAG tasks
 func TestDAGToposort(t *testing.T) {
 	tests := []struct {
-		name                string
-		tasks               []Task
-		expectedOrderCount  int
-		shouldError         bool
-		errorContains       string
-		verifyOrder         func(t *testing.T, sorted []interface{})
+		name               string
+		tasks              []Task
+		expectedOrderCount int
+		shouldError        bool
+		errorContains      string
+		verifyOrder        func(t *testing.T, sorted []interface{})
 	}{
 		{
 			name: "simple linear dependency",
@@ -134,7 +134,7 @@ func TestDAGToposort(t *testing.T) {
 			tasks: []Task{
 				{Name: "task1", Command: "echo 1", Deps: []string{"task1"}},
 			},
-			shouldError:  true,
+			shouldError:   true,
 			errorContains: "cannot be the same",
 		},
 		{

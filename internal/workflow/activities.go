@@ -16,28 +16,28 @@ import (
 
 // Activities contains all workflow activities
 type Activities struct {
-	portManager   *infra.PortManager
-	serverManager *infra.ServerManager
+	portManager     *infra.PortManager
+	serverManager   *infra.ServerManager
 	worktreeManager *infra.WorktreeManager
 }
 
 // NewActivities creates a new Activities instance
 func NewActivities(portMgr *infra.PortManager, serverMgr *infra.ServerManager, worktreeMgr *infra.WorktreeManager) *Activities {
 	return &Activities{
-		portManager:   portMgr,
-		serverManager: serverMgr,
+		portManager:     portMgr,
+		serverManager:   serverMgr,
 		worktreeManager: worktreeMgr,
 	}
 }
 
 // CellBootstrap represents the resources allocated for an agent cell
 type CellBootstrap struct {
-	CellID      string
-	Port        int
-	WorktreeID  string
+	CellID       string
+	Port         int
+	WorktreeID   string
 	WorktreePath string
 	ServerHandle *infra.ServerHandle
-	Client      *agent.Client
+	Client       *agent.Client
 }
 
 // BootstrapCell creates a complete isolated cell for agent execution
@@ -95,12 +95,12 @@ func (a *Activities) BootstrapCell(ctx context.Context, cellID string, branch st
 	cleanupServer = false
 
 	return &CellBootstrap{
-		CellID:      cellID,
-		Port:        port,
-		WorktreeID:  worktreeID,
+		CellID:       cellID,
+		Port:         port,
+		WorktreeID:   worktreeID,
 		WorktreePath: worktree.Path,
 		ServerHandle: serverHandle,
-		Client:      client,
+		Client:       client,
 	}, nil
 }
 
@@ -232,5 +232,5 @@ func (a *Activities) RevertChanges(ctx context.Context, cell *CellBootstrap) err
 func containsString(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
 		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
-		 s[1:len(substr)+1] == substr))
+			s[1:len(substr)+1] == substr))
 }

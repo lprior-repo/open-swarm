@@ -76,10 +76,10 @@ type TaskContext struct {
 
 // ExecutionResult represents the result of a task execution
 type ExecutionResult struct {
-	Success        bool
-	Output         string
-	FilesModified  []string
-	TestsPassed    bool
-	ErrorMessage   string
-	SessionID      string
+	Success       bool
+	Output        string
+	FilesModified []string
+	TestsPassed   bool
+	ErrorMessage  string
+	SessionID     string
 }

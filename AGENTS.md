@@ -1,11 +1,43 @@
 # Open Swarm - Multi-Agent Coordination Framework
 
+## ⚠️ CRITICAL: READ THIS FIRST ⚠️
+
+**Before doing ANY work on this project, you MUST understand these non-negotiable rules:**
+
+### 🔴 RULE #1: BEADS IS MANDATORY FOR ALL CHANGES
+- **EVERY code change** requires a Beads task
+- **EVERY bug fix** requires a Beads task  
+- **EVERY feature** requires a Beads task
+- **EVERY refactor** requires a Beads task
+- **NO EXCEPTIONS**
+
+If there is no Beads task ID (e.g., `open-swarm-xyz`), **DO NOT** make any changes.
+
+### 🔴 RULE #2: SERENA IS THE ONLY WAY TO EDIT CODE
+- **ALL Go code editing** must use Serena's semantic tools
+- **NEVER** use Read + Edit for `.go` files
+- **NEVER** use bash tools (`sed`, `awk`) for code
+- **USE:** `serena_find_symbol`, `serena_replace_symbol_body`, `serena_insert_after_symbol`, `serena_rename_symbol`
+
+**Exception:** Non-code files (`.md`, `.json`, `.yaml`) can use Edit tool.
+
+### ✅ Correct Workflow (MANDATORY)
+1. **Get/Create Beads task** → `bd create` or `bd ready --json`
+2. **Start task** → `bd update task-id --status in_progress`
+3. **Navigate with Serena** → `serena_find_symbol`, `serena_find_referencing_symbols`
+4. **Edit with Serena** → `serena_replace_symbol_body` or `serena_insert_after_symbol`
+5. **Complete task** → `bd close task-id --reason "description"`
+
+**Violating these rules will result in broken coordination and merge conflicts.**
+
+---
+
 ## Project Overview
 
 Open Swarm is a Go-based multi-agent coordination framework leveraging:
 - **Agent Mail MCP Server** - Git-backed messaging and file reservations
-- **Beads** - Lightweight Git-backed issue tracking
-- **Serena MCP Server** - LSP-powered semantic code navigation
+- **Beads** - Lightweight Git-backed issue tracking (CRITICAL for coordination)
+- **Serena MCP Server** - LSP-powered semantic code navigation (MANDATORY for editing)
 
 This project enables multiple AI agents to work collaboratively on the same codebase without conflicts.
 
@@ -82,14 +114,45 @@ go tool cover -html=coverage.out
 
 ## Multi-Agent Coordination Workflow
 
-### Critical Rule: Always Use Beads + Serena for Code Changes
+### 🚨 CRITICAL RULES - READ FIRST 🚨
 
-**MANDATORY:** All code editing work MUST follow this workflow:
+**These rules are MANDATORY for ALL work on this project:**
 
-1. **Task in Beads** - Every code change must be tracked in a Beads task
-2. **Serena for Navigation** - Use Serena's semantic tools to understand code structure
-3. **Serena for Editing** - Use Serena's symbol-level editing tools for all code modifications
-4. **Never edit blindly** - Always use `find_symbol` and `find_references` before making changes
+#### Rule 1: Beads is Non-Negotiable
+**EVERY SINGLE CODE CHANGE, NO MATTER HOW SMALL, MUST BE TRACKED IN BEADS.**
+
+- Creating a function? **Beads task first.**
+- Fixing a typo? **Beads task first.**
+- Refactoring code? **Beads task first.**
+- Adding tests? **Beads task first.**
+- Writing documentation? **Beads task first.**
+
+**If there is no Beads task, DO NOT make the change.**
+
+#### Rule 2: Serena is the ONLY Way to Edit Code
+**ALL code file editing MUST go through Serena's semantic tools.**
+
+- ✅ **USE:** `serena_find_symbol`, `serena_replace_symbol_body`, `serena_insert_after_symbol`
+- ❌ **NEVER USE:** Direct file editing, Read + Edit tools, bash `sed`/`awk`
+
+**Exception:** Non-code files only (markdown, JSON, YAML, config files). Use Edit tool for those.
+
+#### Rule 3: Understand Before You Change
+**ALWAYS use Serena to understand code before modifying it:**
+
+1. **Find the symbol:** `serena_find_symbol: "FunctionName"`
+2. **Check usage:** `serena_find_referencing_symbols: "FunctionName"`
+3. **Get context:** `serena_get_symbols_overview: "path/to/file.go"`
+4. **Only then edit:** `serena_replace_symbol_body` or `serena_insert_after_symbol`
+
+### Workflow Summary
+
+**MANDATORY workflow for ALL code work:**
+
+1. **Task in Beads** - Create or claim a Beads task for the work
+2. **Serena for Navigation** - Use Serena to understand the code structure
+3. **Serena for Editing** - Use Serena's symbol-level tools to modify code
+4. **Never edit blindly** - Always understand impact before making changes
 
 ### Session Start Protocol
 

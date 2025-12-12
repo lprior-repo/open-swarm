@@ -306,10 +306,10 @@ func TestTaskOutputSerialization(t *testing.T) {
 // TestActivitySerialization tests that activities can be properly serialized/deserialized
 func TestActivitySerialization(t *testing.T) {
 	tests := []struct {
-		name         string
-		buildOutput  func() BootstrapOutput
-		taskOutput   func() TaskOutput
-		roundTrip    bool
+		name        string
+		buildOutput func() BootstrapOutput
+		taskOutput  func() TaskOutput
+		roundTrip   bool
 	}{
 		{
 			name: "bootstrap output round-trip",
@@ -415,54 +415,54 @@ func TestShellActivitiesCreation(t *testing.T) {
 // TestBootstrapOutputConstruction tests various ways to construct BootstrapOutput
 func TestBootstrapOutputConstruction(t *testing.T) {
 	tests := []struct {
-		name            string
-		cellID          string
-		port            int
-		worktreeID      string
-		worktreePath    string
-		baseURL         string
-		serverPID       int
-		expectValid     bool
+		name         string
+		cellID       string
+		port         int
+		worktreeID   string
+		worktreePath string
+		baseURL      string
+		serverPID    int
+		expectValid  bool
 	}{
 		{
-			name:            "valid output",
-			cellID:          "cell-001",
-			port:            8001,
-			worktreeID:      "wt-001",
-			worktreePath:    "/tmp/wt-001",
-			baseURL:         "http://localhost:8001",
-			serverPID:       12345,
-			expectValid:     true,
+			name:         "valid output",
+			cellID:       "cell-001",
+			port:         8001,
+			worktreeID:   "wt-001",
+			worktreePath: "/tmp/wt-001",
+			baseURL:      "http://localhost:8001",
+			serverPID:    12345,
+			expectValid:  true,
 		},
 		{
-			name:            "minimum valid values",
-			cellID:          "c",
-			port:            1,
-			worktreeID:      "w",
-			worktreePath:    "/",
-			baseURL:         "http://localhost:1",
-			serverPID:       1,
-			expectValid:     true,
+			name:         "minimum valid values",
+			cellID:       "c",
+			port:         1,
+			worktreeID:   "w",
+			worktreePath: "/",
+			baseURL:      "http://localhost:1",
+			serverPID:    1,
+			expectValid:  true,
 		},
 		{
-			name:            "maximum realistic values",
-			cellID:          "cell-max-0000000",
-			port:            65535,
-			worktreeID:      "worktree-max-0000000",
-			worktreePath:    "/very/long/path/to/worktree/that/might/exist",
-			baseURL:         "http://192.168.255.255:65535",
-			serverPID:       2147483647,
-			expectValid:     true,
+			name:         "maximum realistic values",
+			cellID:       "cell-max-0000000",
+			port:         65535,
+			worktreeID:   "worktree-max-0000000",
+			worktreePath: "/very/long/path/to/worktree/that/might/exist",
+			baseURL:      "http://192.168.255.255:65535",
+			serverPID:    2147483647,
+			expectValid:  true,
 		},
 		{
-			name:            "special characters in paths",
-			cellID:          "cell_with_underscore",
-			port:            8080,
-			worktreeID:      "wt-with-dash",
-			worktreePath:    "/home/user-123/project_name/worktree_01",
-			baseURL:         "http://localhost:8080",
-			serverPID:       99999,
-			expectValid:     true,
+			name:         "special characters in paths",
+			cellID:       "cell_with_underscore",
+			port:         8080,
+			worktreeID:   "wt-with-dash",
+			worktreePath: "/home/user-123/project_name/worktree_01",
+			baseURL:      "http://localhost:8080",
+			serverPID:    99999,
+			expectValid:  true,
 		},
 	}
 

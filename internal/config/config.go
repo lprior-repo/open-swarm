@@ -50,11 +50,11 @@ type MCPServerConfig struct {
 
 // BehaviorConfig controls agent behavior
 type BehaviorConfig struct {
-	AutoCoordinate     bool `yaml:"auto_coordinate"`
-	CheckReservations  bool `yaml:"check_reservations"`
-	AutoRegister       bool `yaml:"auto_register"`
-	PreserveThreads    bool `yaml:"preserve_threads"`
-	UseTodos           bool `yaml:"use_todos"`
+	AutoCoordinate    bool `yaml:"auto_coordinate"`
+	CheckReservations bool `yaml:"check_reservations"`
+	AutoRegister      bool `yaml:"auto_register"`
+	PreserveThreads   bool `yaml:"preserve_threads"`
+	UseTodos          bool `yaml:"use_todos"`
 }
 
 // CoordinationConfig manages coordination settings
@@ -73,16 +73,16 @@ type AgentConfig struct {
 
 // MessagesConfig controls message handling
 type MessagesConfig struct {
-	AutoAck              bool   `yaml:"auto_ack"`
-	CheckInterval        int    `yaml:"check_interval"`
-	ImportanceThreshold  string `yaml:"importance_threshold"`
+	AutoAck             bool   `yaml:"auto_ack"`
+	CheckInterval       int    `yaml:"check_interval"`
+	ImportanceThreshold string `yaml:"importance_threshold"`
 }
 
 // ReservationsConfig manages file reservations
 type ReservationsConfig struct {
-	DefaultTTL      int  `yaml:"default_ttl"`
-	AutoRenew       bool `yaml:"auto_renew"`
-	RenewThreshold  int  `yaml:"renew_threshold"`
+	DefaultTTL     int  `yaml:"default_ttl"`
+	AutoRenew      bool `yaml:"auto_renew"`
+	RenewThreshold int  `yaml:"renew_threshold"`
 }
 
 // ThreadsConfig controls thread behavior
