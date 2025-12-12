@@ -4,6 +4,7 @@ go 1.25.4
 
 require (
 	github.com/bitfield/script v0.24.1
+	github.com/gammazero/toposort v0.1.1
 	github.com/sst/opencode-sdk-go v0.19.1
 	go.temporal.io/sdk v1.38.0
 	gopkg.in/yaml.v3 v3.0.1
