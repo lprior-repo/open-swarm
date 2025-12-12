@@ -36,13 +36,15 @@ Exception: Non-code files (`.md`, `.json`, `.yaml`) use Edit tool.
 
 ## Stack
 
-- **Agent Mail** - Git-backed messaging, file reservations
-- **Beads** - Git-backed issue tracking (CRITICAL)
-- **Serena** - LSP-powered semantic navigation (MANDATORY)
+- **Agent Mail MCP** - Git-backed messaging, file reservations
+- **Beads MCP** - Git-backed issue tracking (CRITICAL) 
+- **Serena MCP** - LSP-powered semantic navigation (MANDATORY)
+
+All tools accessed via MCP servers, configured in `opencode.json`.
 
 ## Prerequisites
 
-- Go 1.25+, Agent Mail (`am`), Beads (`bd`), Serena (MCP), OpenCode
+- Go 1.25+, Agent Mail (`am`), Beads MCP (`beads-mcp`), Serena, OpenCode
 
 ## Setup
 
@@ -64,14 +66,25 @@ bd update bd-xxxx --status in_progress
 /reserve <pattern>
 ```
 
-## Beads
+## Beads (via MCP)
+
+Beads accessed through OpenCode MCP tools (`beads_*`):
 
 ```bash
-bd ready --json                              # Check work
-bd update bd-xxxx --status in_progress       # Start
-bd create "Issue" --parent bd-xxxx           # File sub-issue
-bd close bd-xxxx --reason "Description"      # Complete
+# Check ready tasks
+beads_ready
+
+# Update task status  
+beads_status taskId="bd-xxxx" status="in_progress"
+
+# Create new task
+beads_create title="Issue" parent="bd-xxxx"
+
+# Close task
+beads_close taskId="bd-xxxx" reason="Description"
 ```
+
+**Note:** `bd` CLI commands also work directly for quick operations.
 
 ## Agent Mail
 
@@ -129,7 +142,7 @@ make ci
 ## Session End
 
 ```bash
-bd close bd-xxxx --reason "Description"
+beads_close taskId="bd-xxxx" reason="Description"
 /release
 git add .beads/issues.jsonl && git commit -m "Update tasks" && git push
 ```
