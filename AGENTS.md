@@ -82,6 +82,15 @@ go tool cover -html=coverage.out
 
 ## Multi-Agent Coordination Workflow
 
+### Critical Rule: Always Use Beads + Serena for Code Changes
+
+**MANDATORY:** All code editing work MUST follow this workflow:
+
+1. **Task in Beads** - Every code change must be tracked in a Beads task
+2. **Serena for Navigation** - Use Serena's semantic tools to understand code structure
+3. **Serena for Editing** - Use Serena's symbol-level editing tools for all code modifications
+4. **Never edit blindly** - Always use `find_symbol` and `find_references` before making changes
+
 ### Session Start Protocol
 
 **Every agent should start their session with:**
@@ -141,6 +150,14 @@ Reason: [Brief description]
 
 ### Task Management with Beads
 
+**MANDATORY: All code changes must be tracked in Beads.**
+
+Never make code edits without a corresponding Beads task. This ensures:
+- Work is coordinated across agents
+- Changes are traceable
+- Dependencies are managed
+- Progress is visible to the team
+
 **Check ready work:**
 ```bash
 bd ready --json
@@ -153,10 +170,10 @@ bd update bd-xxxx --status in_progress
 
 **During development:**
 ```bash
-# File discovered issues
+# File discovered issues (ALWAYS create sub-tasks for new work found)
 bd create "Issue description" --parent bd-xxxx --type discovered-from
 
-# Add dependencies
+# Add dependencies when work blocks other work
 bd dep add bd-child bd-parent --type blocks
 ```
 
@@ -277,37 +294,53 @@ func NewUserService(repo UserRepository, logger *log.Logger) *UserService {
 
 ### Adding a New Feature
 
-**Multi-Agent Parallel Workflow:**
+**Multi-Agent Parallel Workflow (with Beads + Serena):**
 
 **Agent 1 (Backend):**
 ```bash
-# 1. Check Beads
+# 1. Check Beads for ready tasks
 bd ready --json  # Select bd-a1b2 (API implementation)
 
-# 2. Reserve files
+# 2. Reserve files via Agent Mail
 Reserve: internal/api/**/*.go, pkg/domain/**/*.go
 Exclusive: true
 
-# 3. Update Beads
+# 3. Update Beads status
 bd update bd-a1b2 --status in_progress
 
-# 4. Use Serena for navigation
+# 4. Use Serena to understand existing code structure
 Find symbol: "APIHandler"  # Locate existing patterns
+Get symbols overview: "internal/api/handlers.go" depth 1
 Find references: "UserService"  # Understand usage
 
-# 5. Implement feature
-# ... development work ...
+# 5. Implement feature using Serena's editing tools
+# NEVER directly edit files - use Serena!
 
-# 6. Test
+# Example: Add new handler method
+Insert after symbol: "APIHandler.GetUser" with body:
+```go
+func (h *APIHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+    // Implementation
+}
+```
+
+# Add route registration
+Find symbol: "RegisterRoutes"
+Replace symbol body: "RegisterRoutes" to add new route
+
+# 6. Test implementation
 go test ./internal/api/... -v
 
-# 7. Notify frontend agent
+# 7. File sub-tasks for any discovered work
+bd create "Add input validation for CreateUser" --parent bd-a1b2
+
+# 8. Notify frontend agent via Agent Mail
 Send message to: FrontendAgent
 Subject: [bd-a1b2] User API endpoints ready
 Thread: bd-a1b2
 
-# 8. Complete
-bd close bd-a1b2 --reason "Implemented and tested"
+# 9. Complete in Beads and release reservations
+bd close bd-a1b2 --reason "Implemented and tested using Serena"
 /release
 ```
 
@@ -330,32 +363,69 @@ Thread: bd-a1b2
 /release
 ```
 
-### Bug Fix Workflow
+### Bug Fix Workflow (with Beads + Serena)
+
+**MANDATORY: All bug fixes MUST be tracked in Beads and edited via Serena.**
 
 ```bash
-# 1. File issue in Beads
+# 1. File issue in Beads FIRST
 bd create "Fix null pointer in user handler" -t bug -p high
+# Returns: bd-c3d4
 
-# 2. Reserve affected files
+# 2. Start the task
+bd update bd-c3d4 --status in_progress
+
+# 3. Reserve affected files via Agent Mail
 Reserve: internal/api/user_handlers.go
+Exclusive: true
 
-# 3. Use Serena to understand context
+# 4. Use Serena to understand the bug
+# NEVER read entire file - use symbol navigation
 Find symbol: "HandleUserCreate"
-Find references: "User"
+# Examine the returned symbol body
 
-# 4. Fix and test
-# ... fix implementation ...
+Find references: "User"
+# See all usages to understand the problem
+
+# 5. Fix using Serena's editing tools
+# NEVER directly edit - use replace_symbol_body
+Replace symbol body: "HandleUserCreate" with fixed implementation:
+```go
+func HandleUserCreate(w http.ResponseWriter, r *http.Request) {
+    if r.Body == nil {
+        http.Error(w, "request body required", http.StatusBadRequest)
+        return
+    }
+    // ... rest of implementation with null checks
+}
+```
+
+# 6. Write regression test using Serena
+Insert after symbol: "TestHandleUserCreate" with new test:
+```go
+func TestHandleUserCreate_NullBody(t *testing.T) {
+    // Test implementation
+}
+```
+
+# 7. Run tests
 go test ./internal/api/... -v
 
-# 5. Write regression test
-# ... test implementation ...
+# 8. Close issue in Beads
+bd close bd-c3d4 --reason "Fixed null pointer with null checks, added regression test"
 
-# 6. Close issue
-bd close bd-xxxx --reason "Fixed null pointer, added regression test"
-
-# 7. Release
+# 9. Release file reservation
 /release
+
+# 10. Notify team via Agent Mail if needed
+Send message: "Bug bd-c3d4 fixed in HandleUserCreate"
 ```
+
+**Key Points:**
+- Beads task BEFORE any code change
+- Serena ONLY for code reading and editing
+- Test the fix before closing the task
+- Always add regression tests for bugs
 
 ### Code Review Workflow
 
@@ -379,33 +449,109 @@ OpenCode provides slash commands configured in `opencode.json`:
 - `/task-complete <id>` - Complete task and release files
 - `/review <files>` - Code review with @reviewer agent
 
-## Using Serena for Code Navigation
+## Using Serena for Code Navigation and Editing
 
-Serena provides LSP-powered semantic navigation:
+**MANDATORY: Use Serena for ALL code modifications.**
 
-**Find symbols:**
+Serena provides LSP-powered semantic navigation and editing. You MUST use these tools instead of direct file editing.
+
+### Why Use Serena?
+
+1. **Semantic Understanding** - Navigate code by symbols, not lines
+2. **Context Efficiency** - Minimize token usage by reading only relevant symbols
+3. **Safe Refactoring** - Understand impact before making changes
+4. **Precision** - Symbol-level edits prevent accidental breakage
+5. **Multi-Agent Coordination** - Other agents can see what you're modifying
+
+### Navigation (Always First Step)
+
+**BEFORE editing, always explore:**
+
 ```
+# Find the symbol you need to modify
 Find symbol: "UserService"
 Find symbol: "HandleUserCreate"
+
+# Understand where it's used
+Find all references to: "UserService"
+Find all references to: "HandleUserCreate"
+
+# Get file overview
+Get symbols overview: "internal/api/handlers.go"
 ```
 
-**Find references:**
+### Editing (Use Symbol-Level Tools)
+
+**NEVER use direct file editing. ALWAYS use Serena's editing tools:**
+
 ```
-Find all references to: "User"
-Find all references to: "UserRepository"
+# Replace a function/method body
+Replace symbol body: "HandleUserCreate" with new implementation
+
+# Add a new method to a class/struct
+Insert after symbol: "UserService.GetUser" a new method
+
+# Add a new function
+Insert before symbol: "FirstFunctionInFile" a new function
+
+# Rename across entire codebase
+Rename symbol: "UserService" to "UserManager"
 ```
 
-**Symbol-level editing:**
+### Code Editing Workflow
+
+**MANDATORY STEPS for every code change:**
+
+1. **Understand First** - Use `find_symbol` to locate what you need
+2. **Check Impact** - Use `find_references` to see where it's used
+3. **Plan Changes** - Determine which symbols need modification
+4. **Edit Precisely** - Use `replace_symbol_body` or `insert_after_symbol`
+5. **Verify** - Run tests to confirm changes work
+
+### Example: Adding a New Method
+
 ```
-Edit symbol: "HandleUserCreate" to add validation
-Insert after symbol: "UserService.constructor" a new method
+# 1. Find the struct/class
+Find symbol: "UserService"
+# Returns: Location in pkg/service/user.go
+
+# 2. Understand existing methods
+Get symbols overview: "pkg/service/user.go" with depth 1
+# Returns: List of methods on UserService
+
+# 3. Insert new method
+Insert after symbol: "UserService.GetUser" with body:
+```go
+func (us *UserService) UpdateUser(ctx context.Context, id string, updates *UserUpdates) error {
+    // Implementation
+}
 ```
 
-**Benefits:**
-- Navigate large files without reading entirely
-- Understand impact of changes before making them
-- Minimize context window usage
-- Work at the semantic level, not line-by-line
+# 4. Test
+Run: go test ./pkg/service/... -v
+```
+
+### When NOT to Use Direct File Editing
+
+**NEVER directly edit files when:**
+- Adding/modifying functions, methods, or types
+- Refactoring code structure
+- Renaming symbols
+- Understanding code flow
+- Working with large files
+
+**Only use direct file editing for:**
+- Non-code files (markdown, JSON, YAML)
+- Configuration files
+- Very small, isolated changes to non-symbol content
+
+### Benefits of Serena-First Approach:
+
+- **No context waste** - Only read symbols you need, not entire files
+- **Precision** - Edit exactly what you intend, nothing more
+- **Safety** - LSP ensures semantic correctness
+- **Coordination** - Other agents can track symbol-level changes
+- **Speed** - Faster than reading/editing large files manually
 
 ## Testing Strategy
 
@@ -568,17 +714,27 @@ Coordinate handoff or work on different files
 
 ## Quick Reference
 
-| Task | Command |
-|------|---------|
-| Start session | `opencode` → `/sync` |
-| Check ready work | `/task-ready` or `bd ready --json` |
-| Start task | `/task-start bd-xxxx` |
-| Reserve files | `/reserve pattern` |
-| Check inbox | Check Agent Mail inbox |
-| Send message | Use Agent Mail send_message tool |
-| Code review | `/review files` |
-| Complete task | `/task-complete bd-xxxx` |
-| Release files | `/release` |
-| Find symbol | Use Serena find_symbol |
-| Run tests | `go test ./...` |
-| Build | `go build -o bin/open-swarm ./cmd/open-swarm` |
+| Task | Command | Tool |
+|------|---------|------|
+| Start session | `opencode` → `/sync` | OpenCode + Agent Mail |
+| Check ready work | `bd ready --json` | Beads |
+| Start task | `bd update bd-xxxx --status in_progress` | Beads |
+| Reserve files | `/reserve pattern` | Agent Mail |
+| Check inbox | Check Agent Mail inbox | Agent Mail |
+| Send message | Use Agent Mail send_message tool | Agent Mail |
+| Find symbol | `find_symbol: "SymbolName"` | **Serena (MANDATORY)** |
+| Find references | `find_references: "SymbolName"` | **Serena (MANDATORY)** |
+| Get overview | `get_symbols_overview: "file.go"` | **Serena (MANDATORY)** |
+| Edit code | `replace_symbol_body` / `insert_after_symbol` | **Serena (MANDATORY)** |
+| Rename symbol | `rename_symbol: "OldName" to "NewName"` | **Serena (MANDATORY)** |
+| Run tests | `go test ./...` | Go |
+| Complete task | `bd close bd-xxxx --reason "..."` | Beads |
+| Release files | `/release` | Agent Mail |
+| Build | `go build -o bin/open-swarm ./cmd/open-swarm` | Go |
+
+**Critical Reminders:**
+- ✅ **ALWAYS** use Beads for task tracking
+- ✅ **ALWAYS** use Serena for code navigation and editing
+- ✅ **ALWAYS** reserve files before editing
+- ❌ **NEVER** edit code files directly without Serena
+- ❌ **NEVER** make code changes without a Beads task

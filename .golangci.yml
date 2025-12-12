@@ -1,0 +1,316 @@
+# golangci-lint configuration for open-swarm
+# Tailored for Temporal workflows, gRPC services, and CLI applications
+# Production-ready but not overly strict
+
+run:
+  timeout: 5m
+  tests: true
+  build-tags:
+    - integration
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+
+linters:
+  enable:
+    # Default linters
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    # Additional linters
+    - bodyclose
+    - contextcheck
+    - cyclop
+    - dupl
+    - durationcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - gocheckcompilerdirectives
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - gofmt
+    - goimports
+    - mnd
+    - goprintffuncname
+    - gosec
+    - misspell
+    - nakedret
+    - nilerr
+    - nilnil
+    - noctx
+    - nolintlint
+    - prealloc
+    - predeclared
+    - revive
+    - stylecheck
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - whitespace
+    - wrapcheck
+  disable:
+    - containedctx
+    - depguard
+    - exhaustruct
+    - forbidigo
+    - forcetypeassert
+    - funlen
+    - gci
+    - godot
+    - godox
+    - goerr113
+    - gofumpt
+    - goheader
+    - gomoddirectives
+    - gomodguard
+    - grouper
+    - importas
+    - interfacebloat
+    - ireturn
+    - lll
+    - maintidx
+    - makezero
+    - nestif
+    - nlreturn
+    - nonamedreturns
+    - paralleltest
+    - promlinter
+    - tagliatelle
+    - testableexamples
+    - testpackage
+    - varnamelen
+    - wsl
+
+linters-settings:
+  cyclop:
+    max-complexity: 15
+    package-average: 0.0
+    skip-tests: true
+  dupl:
+    threshold: 150
+  errcheck:
+    check-type-assertions: true
+    check-blank: false
+    exclude-functions:
+      - (io.Closer).Close
+      - (*database/sql.Rows).Close
+      - (*database/sql.Stmt).Close
+      - (*os.File).Close
+  errorlint:
+    errorf: true
+    asserts: true
+    comparison: true
+  exhaustive:
+    default-signifies-exhaustive: true
+  gocognit:
+    min-complexity: 20
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+    ignore-tests: true
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
+      - hugeParam
+      - unnamedResult
+    settings:
+      rangeValCopy:
+        sizeThreshold: 512
+      hugeParam:
+        sizeThreshold: 512
+  gocyclo:
+    min-complexity: 15
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: open-swarm
+  mnd:
+    ignored-functions:
+      - 'time.*'
+      - 'context.WithTimeout'
+      - 'context.WithDeadline'
+      - 'make'
+      - 'math.*'
+      - 'strconv.*'
+    ignored-numbers:
+      - '0'
+      - '1'
+      - '2'
+      - '10'
+      - '100'
+      - '1000'
+  gosec:
+    excludes:
+      - G104
+      - G204
+    severity: medium
+    confidence: medium
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+      - shadow
+  misspell:
+    locale: US
+    ignore-words:
+      - temporal
+      - grpc
+  nakedret:
+    max-func-lines: 30
+  nolintlint:
+    require-explanation: true
+    require-specific: true
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: true
+  revive:
+    enable-all-rules: false
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+        disabled: false
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+        disabled: true
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+        disabled: true
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+        disabled: true
+      - name: unreachable-code
+      - name: redefines-builtin-id
+  staticcheck:
+    checks: ["all"]
+  stylecheck:
+    checks: ["all", "-ST1000", "-ST1003"]
+    dot-import-whitelist:
+      - fmt
+    http-status-code-whitelist: ["200", "400", "404", "500"]
+  thelper:
+    test:
+      first: true
+      name: true
+      begin: true
+    benchmark:
+      first: true
+      name: true
+      begin: true
+  unparam:
+    check-exported: false
+  wrapcheck:
+    ignoreSigs:
+      - .Errorf(
+      - errors.New(
+      - errors.Unwrap(
+      - .Wrap(
+      - .Wrapf(
+      - .WithMessage(
+      - .WithMessagef(
+      - .WithStack(
+  whitespace:
+    multi-if: false
+    multi-func: false
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 3
+  exclude-use-default: true
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - cyclop
+        - dupl
+        - errcheck
+        - errorlint
+        - gochecknoglobals
+        - gocognit
+        - goconst
+        - gocritic
+        - gocyclo
+        - mnd
+        - gosec
+        - wrapcheck
+    - path: cmd/.*/main\.go
+      linters:
+        - gochecknoglobals
+        - mnd
+        - wrapcheck
+    - path: internal/temporal/
+      linters:
+        - mnd
+        - wrapcheck
+    - path: internal/temporal/activities_.*\.go
+      linters:
+        - wrapcheck
+        - gosec
+    - path: internal/infra/
+      linters:
+        - mnd
+    - text: "G104:"
+      linters:
+        - gosec
+    - text: "context.Context should be the first parameter"
+      path: internal/temporal/
+    - text: "`.*` is unused"
+      linters:
+        - unparam
+      path: _test\.go
+    - text: "should have a package comment"
+      linters:
+        - revive
+        - stylecheck
+    - path: ".*\\.pb\\.go$"
+      linters:
+        - all
+    - path: ".*\\.pb\\.gw\\.go$"
+      linters:
+        - all
+    - path: ".*_gen\\.go$"
+      linters:
+        - all
+    - path: "mock_.*\\.go$"
+      linters:
+        - all
+  new: false
+  fix: false
+
+output:
+  formats:
+    - format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+  sort-results: true

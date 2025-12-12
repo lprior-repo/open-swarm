@@ -1,4 +1,4 @@
-.PHONY: help build test run-worker run-client docker-up docker-down clean
+.PHONY: help build test run-worker run-client docker-up docker-down clean fmt lint lint-fix test-race test-coverage test-tdd install-tools ci
 
 # Variables
 GO := go
@@ -7,6 +7,20 @@ BINARY_WORKER := temporal-worker
 BINARY_CLIENT := reactor-client
 BINARY_MAIN := open-swarm
 
+# Detect OS for cross-platform support
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Linux)
+	OS := linux
+endif
+ifeq ($(UNAME_S),Darwin)
+	OS := darwin
+endif
+
+# Tool versions
+GOLANGCI_LINT_VERSION := v2.7.2
+GOPATH := $(shell go env GOPATH)
+GOLANGCI_LINT := $(GOPATH)/bin/golangci-lint
+
 # Default target displays help
 help:
 	@echo "Open Swarm - Makefile Commands"
@@ -14,29 +28,46 @@ help:
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""
-	@echo "Available targets:"
-	@echo ""
-	@echo "  help              - Show this help message"
+	@echo "Build & Development:"
 	@echo "  build             - Build all binaries (worker, client, coordinator)"
-	@echo "  test              - Run all tests with coverage"
-	@echo "  test-tdd          - Run tests with TDD Guard reporter"
+	@echo "  fmt               - Format code with gofmt"
+	@echo "  install-tools     - Install required development tools"
+	@echo ""
+	@echo "Testing:"
+	@echo "  test              - Run all tests"
 	@echo "  test-race         - Run tests with race detector"
 	@echo "  test-coverage     - Generate HTML coverage report"
-	@echo "  run-worker        - Start the Temporal worker (requires docker-up)"
-	@echo "  run-client        - Start the reactor client (usage: make run-client TASK=<id> PROMPT='<prompt>')"
+	@echo "  test-tdd          - Run tests with TDD Guard reporter"
+	@echo ""
+	@echo "Linting:"
+	@echo "  lint              - Run golangci-lint"
+	@echo "  lint-fix          - Run golangci-lint with auto-fix"
+	@echo ""
+	@echo "CI:"
+	@echo "  ci                - Run all CI checks locally (fmt, lint, test)"
+	@echo ""
+	@echo "Docker:"
 	@echo "  docker-up         - Start Docker Compose services (Temporal + PostgreSQL)"
 	@echo "  docker-down       - Stop Docker Compose services"
 	@echo "  docker-logs       - View Docker Compose service logs"
+	@echo ""
+	@echo "Runtime:"
+	@echo "  run-worker        - Start the Temporal worker (requires docker-up)"
+	@echo "  run-client        - Start the reactor client (usage: make run-client TASK=<id> PROMPT='<prompt>')"
+	@echo ""
+	@echo "Cleanup:"
 	@echo "  clean             - Remove built binaries and temporary files"
 	@echo ""
 	@echo "Examples:"
+	@echo "  make install-tools"
 	@echo "  make build"
 	@echo "  make test"
-	@echo "  make test-tdd"
+	@echo "  make lint-fix"
+	@echo "  make ci"
 	@echo "  make docker-up"
 	@echo "  make run-worker"
-	@echo "  make run-client TASK=task-1 PROMPT='Implement feature X'"
-	@echo "  make docker-down"
+	@echo ""
+	@echo "Detected OS: $(OS)"
 	@echo ""
 
 # Build all binaries
@@ -52,15 +83,12 @@ build:
 	@echo ""
 	@echo "✓ All binaries built successfully"
 
-# Run tests with coverage
+# Run all tests
 test:
 	@echo "Running tests..."
-	@$(GO) test -v -race -coverprofile=coverage.out ./...
+	@$(GO) test -v ./...
 	@echo ""
 	@echo "✓ Tests completed"
-	@echo ""
-	@echo "Coverage report:"
-	@$(GO) tool cover -func=coverage.out | tail -1
 
 # Start Temporal worker
 run-worker: build
@@ -112,12 +140,9 @@ docker-logs:
 clean:
 	@echo "Cleaning up..."
 	@rm -rf bin/
-	@rm -f coverage.out
+	@rm -f coverage.out coverage.html
 	@$(GO) clean
 	@echo "✓ Cleanup complete"
-
-# Additional development targets
-.PHONY: fmt lint test-race test-coverage test-tdd
 
 # Format code
 fmt:
@@ -125,18 +150,87 @@ fmt:
 	@$(GO) fmt ./...
 	@echo "✓ Code formatted"
 
+# Install development tools
+install-tools:
+	@echo "Installing development tools..."
+	@echo "  - golangci-lint $(GOLANGCI_LINT_VERSION)"
+	@if [ "$(OS)" = "darwin" ]; then \
+		brew install golangci-lint || brew upgrade golangci-lint; \
+	elif [ "$(OS)" = "linux" ]; then \
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin $(GOLANGCI_LINT_VERSION); \
+	else \
+		echo "Unsupported OS. Please install golangci-lint manually."; \
+		exit 1; \
+	fi
+	@echo "  - goimports"
+	@$(GO) install golang.org/x/tools/cmd/goimports@latest
+	@echo ""
+	@echo "✓ Tools installed successfully"
+	@echo ""
+	@echo "Installed tools:"
+	@echo "  golangci-lint: $$($(GOPATH)/bin/golangci-lint --version 2>/dev/null || echo 'not found')"
+	@echo "  goimports: $$(test -x $(GOPATH)/bin/goimports && echo '$(GOPATH)/bin/goimports' || echo 'not found')"
+
+# Run linter
+lint:
+	@echo "Running golangci-lint..."
+	@if [ ! -x "$(GOLANGCI_LINT)" ]; then \
+		echo "Error: golangci-lint not found at $(GOLANGCI_LINT)"; \
+		echo "Run 'make install-tools' first."; \
+		exit 1; \
+	fi
+	@$(GOLANGCI_LINT) run --timeout=5m
+	@echo "✓ Linting completed"
+
+# Run linter with auto-fix
+lint-fix:
+	@echo "Running golangci-lint with auto-fix..."
+	@if [ ! -x "$(GOLANGCI_LINT)" ]; then \
+		echo "Error: golangci-lint not found at $(GOLANGCI_LINT)"; \
+		echo "Run 'make install-tools' first."; \
+		exit 1; \
+	fi
+	@$(GOLANGCI_LINT) run --fix --timeout=5m
+	@echo "✓ Linting with auto-fix completed"
+
 # Run tests with race detector
 test-race:
 	@echo "Running tests with race detector..."
 	@$(GO) test -v -race ./...
+	@echo ""
+	@echo "✓ Race detector tests completed"
 
-# Generate coverage report in HTML
-test-coverage: test
+# Generate coverage report
+test-coverage:
+	@echo "Running tests with coverage..."
+	@$(GO) test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+	@echo ""
+	@echo "Coverage summary:"
+	@$(GO) tool cover -func=coverage.out | tail -1
+	@echo ""
+	@echo "Generating HTML coverage report..."
 	@$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "✓ Coverage report generated: coverage.html"
+	@echo ""
+	@echo "Open coverage.html in your browser to view detailed coverage"
 
 # Run tests with TDD Guard reporter
 test-tdd:
 	@echo "Running tests with TDD Guard reporter..."
-	@$(GO) test -json ./... 2>&1 | $(shell go env GOPATH)/bin/tdd-guard-go -project-root $(PWD)
+	@$(GO) test -json ./... 2>&1 | $(GOPATH)/bin/tdd-guard-go -project-root $(PWD)
 	@echo "✓ TDD Guard tests completed"
+
+# Run all CI checks locally
+ci: fmt lint test test-race
+	@echo ""
+	@echo "=============================="
+	@echo "✓ All CI checks passed!"
+	@echo "=============================="
+	@echo ""
+	@echo "Summary:"
+	@echo "  ✓ Code formatting (gofmt)"
+	@echo "  ✓ Linting (golangci-lint)"
+	@echo "  ✓ Unit tests"
+	@echo "  ✓ Race detector"
+	@echo ""
+	@echo "Ready to commit and push!"

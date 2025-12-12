@@ -1,0 +1,11 @@
+[install]
+# Install dependencies from npm registry
+registry = "https://registry.npmjs.org/"
+
+[test]
+# Test configuration
+root = "."
+
+[run]
+# Bun runtime configuration
+shell = "bun"

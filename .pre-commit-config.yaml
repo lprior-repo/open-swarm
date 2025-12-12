@@ -1,0 +1,112 @@
+# Pre-commit hooks configuration for open-swarm
+# https://pre-commit.com/
+#
+# Installation:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Usage:
+#   pre-commit run --all-files  # Run on all files
+#   pre-commit run              # Run on staged files only
+#
+
+repos:
+  # Go formatting
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+        name: gofmt
+        description: Run gofmt on Go files
+        args: [-w]
+        
+      - id: go-vet
+        name: go vet
+        description: Run go vet on Go files
+        
+      - id: go-imports
+        name: goimports
+        description: Run goimports on Go files
+        args: [-w]
+
+  # Go mod tidy
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-mod-tidy
+        name: go mod tidy
+        description: Ensure go.mod and go.sum are tidy
+
+  # golangci-lint (fast mode)
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.55.2
+    hooks:
+      - id: golangci-lint
+        name: golangci-lint (fast)
+        description: Fast linting with golangci-lint
+        args:
+          - --fast
+          - --timeout=60s
+          - --new
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+        exclude: '\.md$'
+        
+      - id: end-of-file-fixer
+        name: Fix end of files
+        exclude: '\.md$'
+        
+      - id: check-yaml
+        name: Check YAML syntax
+        args: [--safe]
+        
+      - id: check-json
+        name: Check JSON syntax
+        
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+        
+      - id: check-added-large-files
+        name: Check for large files
+        args: [--maxkb=1024]
+        
+      - id: mixed-line-ending
+        name: Check line endings
+        args: [--fix=lf]
+
+  # Markdown linting (optional, can be slow)
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.38.0
+    hooks:
+      - id: markdownlint
+        name: markdownlint
+        description: Lint markdown files
+        args: [--fix]
+        # Only run manually to avoid slowing down commits
+        stages: [manual]
+
+# Configuration
+default_language_version:
+  python: python3
+
+# Performance: Run hooks in parallel when possible
+fail_fast: false
+
+# Exclude patterns
+exclude: |
+  (?x)^(
+    vendor/|
+    bin/|
+    \.beads/|
+    \.serena/|
+    \.claude/|
+    \.opencode/|
+    coverage\.out|
+    coverage\.html|
+    .*\.sqlite3.*
+  )$

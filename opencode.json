@@ -20,23 +20,21 @@
     "grep": true,
     "glob": true,
     "list": true,
+    "webfetch": true,
     "serena_*": true,
-    "agent-mail_*": true
+    "agent-mail_*": true,
+    "beads_*": true
   },
 
   "permission": {
     "write": "allow",
     "edit": "allow",
-    "bash": {
-      "*": "ask",
-      "git *": "allow",
-      "go *": "allow",
-      "make *": "allow",
-      "bd *": "allow"
-    },
-    "agent-mail_send_message": "ask",
-    "agent-mail_file_reservation_paths": "allow",
-    "agent-mail_release_file_reservations": "allow"
+    "read": "allow",
+    "bash": "allow",
+    "webfetch": "allow",
+    "agent-mail_*": "allow",
+    "beads_*": "allow",
+    "serena_*": "allow"
   },
 
   "formatter": {
@@ -46,38 +44,50 @@
     },
     "prettier": {
       "command": ["prettier", "--write", "$FILE"],
-      "extensions": [".json", ".md"]
+      "extensions": [".json", ".md", ".yaml", ".yml"]
     }
   },
 
   "mcp": {
     "agent-mail": {
-      "type": "local",
-      "command": ["python", "-m", "mcp_agent_mail.server"],
+      "type": "remote",
+      "url": "http://localhost:8765/mcp",
       "enabled": true,
-      "environment": {
-        "AGENT_MAIL_DB": "{env:HOME}/.agent-mail/mail.db",
-        "AGENT_MAIL_ARCHIVE": "{env:HOME}/.agent-mail/archive",
-        "AGENT_MAIL_HTTP_PORT": "8765"
-      }
+      "timeout": 30000
     },
     "serena": {
       "type": "local",
       "command": [
-        "uvx",
-        "--from",
-        "git+https://github.com/oraios/serena",
-        "serena",
-        "start-mcp-server",
-        "--cwd",
-        "{env:PWD}"
+        "sh",
+        "-c",
+        "PATH=\"$HOME/go/bin:$PATH\" uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context ide --mode editing --project \"$PWD\""
       ],
-      "enabled": true
+      "enabled": true,
+      "timeout": 60000
+    },
+    "beads": {
+      "type": "local",
+      "command": ["beads-mcp"],
+      "environment": {
+        "BEADS_USE_DAEMON": "1",
+        "BEADS_ACTOR": "opencode"
+      },
+      "enabled": true,
+      "timeout": 30000
+    }
+  },
+
+  "lsp": {
+    "typescript": {
+      "command": ["typescript-language-server", "--stdio"],
+      "filetypes": [".ts", ".tsx", ".js", ".jsx"],
+      "rootPatterns": ["package.json", "tsconfig.json"]
     }
   },
 
   "instructions": [
-    "AGENTS.md"
+    "AGENTS.md",
+    "CONTRIBUTING.md"
   ],
 
   "agent": {
@@ -86,6 +96,7 @@
       "mode": "subagent",
       "model": "anthropic/claude-opus-4-5",
       "temperature": 0.1,
+      "max_steps": 50,
       "tools": {
         "write": false,
         "edit": false,
@@ -100,10 +111,13 @@
       "mode": "subagent",
       "model": "anthropic/claude-sonnet-4-5",
       "temperature": 0.3,
+      "max_steps": 30,
       "tools": {
         "write": false,
         "edit": false,
-        "agent-mail_*": true
+        "read": true,
+        "agent-mail_*": true,
+        "beads_*": true
       },
       "prompt": "You specialize in coordinating multiple agents using Agent Mail for messaging and file reservations, and Beads for task management. Focus on communication, task assignment, and conflict resolution."
     },
@@ -112,10 +126,13 @@
       "mode": "subagent",
       "model": "anthropic/claude-sonnet-4-5",
       "temperature": 0.2,
+      "max_steps": 40,
       "tools": {
         "write": false,
         "edit": false,
         "read": true,
+        "grep": true,
+        "glob": true,
         "serena_*": true
       },
       "prompt": "You are a Go code review expert. Focus on: security vulnerabilities, performance issues, idiomatic Go patterns, error handling, test coverage, and Clean Architecture principles."
@@ -125,12 +142,48 @@
       "mode": "subagent",
       "model": "anthropic/claude-sonnet-4-5",
       "temperature": 0.3,
+      "max_steps": 50,
       "tools": {
         "write": true,
         "edit": true,
-        "bash": true
+        "read": true,
+        "bash": true,
+        "glob": true,
+        "serena_*": true
       },
       "prompt": "You write comprehensive Go tests using table-driven patterns. Focus on unit tests, integration tests, mocking interfaces, and achieving high coverage."
+    },
+    "explorer": {
+      "description": "Fast codebase exploration and search specialist",
+      "mode": "subagent",
+      "model": "anthropic/claude-haiku-4-5",
+      "temperature": 0.2,
+      "max_steps": 30,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "read": true,
+        "grep": true,
+        "glob": true,
+        "list": true,
+        "serena_*": true
+      },
+      "prompt": "You specialize in fast codebase exploration. Find files by patterns, search code for keywords, and answer questions about the codebase structure. Be quick and thorough."
+    },
+    "documenter": {
+      "description": "Documentation writer for Go projects",
+      "mode": "subagent",
+      "model": "anthropic/claude-sonnet-4-5",
+      "temperature": 0.4,
+      "max_steps": 30,
+      "tools": {
+        "write": true,
+        "edit": true,
+        "read": true,
+        "glob": true,
+        "serena_*": true
+      },
+      "prompt": "You write clear, concise documentation for Go projects. Focus on README files, code comments, API documentation, and architectural docs. Follow Go documentation conventions."
     }
   },
 
@@ -166,8 +219,31 @@
     },
     "review": {
       "description": "Comprehensive code review",
-      "template": "Review $ARGUMENTS for: security issues, performance problems, Go best practices, error handling, test coverage. Use @reviewer agent.",
+      "template": "Review $ARGUMENTS for: security issues, performance problems, Go best practices, error handling, test coverage.",
       "agent": "reviewer"
+    },
+    "explore": {
+      "description": "Fast codebase exploration",
+      "template": "Explore the codebase to answer: $ARGUMENTS. Find relevant files, search for patterns, and provide a concise answer.",
+      "agent": "explorer"
+    },
+    "test": {
+      "description": "Write tests for specified code",
+      "template": "Write comprehensive Go tests for $ARGUMENTS. Use table-driven patterns, test edge cases, and ensure high coverage.",
+      "agent": "tester"
+    },
+    "doc": {
+      "description": "Generate documentation",
+      "template": "Write documentation for $ARGUMENTS. Follow Go conventions and keep it clear and concise.",
+      "agent": "documenter"
+    },
+    "build": {
+      "description": "Build the project",
+      "template": "Run 'go build ./...' and report any errors. If successful, confirm the build completed."
+    },
+    "lint": {
+      "description": "Run linters on the codebase",
+      "template": "Run 'golangci-lint run' and report any issues found. Suggest fixes for critical issues."
     }
   },
 
@@ -176,7 +252,11 @@
   },
 
   "tui": {
-    "scroll_speed": 1.5
+    "scroll_speed": 1.5,
+    "scroll_acceleration": {
+      "enabled": true,
+      "factor": 1.2
+    }
   },
 
   "share": "manual",
