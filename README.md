@@ -207,6 +207,33 @@ go test -cover ./...
 # Coverage report
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
+
+# With TDD Guard reporter (enhanced test output)
+make test-tdd
+
+# Using Makefile targets
+make test              # Standard tests with coverage
+make test-race         # Tests with race detector
+make test-coverage     # HTML coverage report
+make test-tdd          # Tests with TDD Guard reporter
+```
+
+#### TDD Guard
+
+This project uses [TDD Guard](https://github.com/nizos/tdd-guard) for enhanced test reporting. The reporter provides structured test output that's easier to parse and analyze.
+
+**Installation:**
+```bash
+go install github.com/nizos/tdd-guard/reporters/go/cmd/tdd-guard-go@latest
+```
+
+**Usage:**
+```bash
+# Via Makefile
+make test-tdd
+
+# Directly
+go test -json ./... 2>&1 | tdd-guard-go -project-root $(pwd)
 ```
 
 ### Building

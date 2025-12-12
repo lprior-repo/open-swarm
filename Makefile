@@ -19,6 +19,9 @@ help:
 	@echo "  help              - Show this help message"
 	@echo "  build             - Build all binaries (worker, client, coordinator)"
 	@echo "  test              - Run all tests with coverage"
+	@echo "  test-tdd          - Run tests with TDD Guard reporter"
+	@echo "  test-race         - Run tests with race detector"
+	@echo "  test-coverage     - Generate HTML coverage report"
 	@echo "  run-worker        - Start the Temporal worker (requires docker-up)"
 	@echo "  run-client        - Start the reactor client (usage: make run-client TASK=<id> PROMPT='<prompt>')"
 	@echo "  docker-up         - Start Docker Compose services (Temporal + PostgreSQL)"
@@ -29,6 +32,7 @@ help:
 	@echo "Examples:"
 	@echo "  make build"
 	@echo "  make test"
+	@echo "  make test-tdd"
 	@echo "  make docker-up"
 	@echo "  make run-worker"
 	@echo "  make run-client TASK=task-1 PROMPT='Implement feature X'"
@@ -113,7 +117,7 @@ clean:
 	@echo "✓ Cleanup complete"
 
 # Additional development targets
-.PHONY: fmt lint test-race test-coverage
+.PHONY: fmt lint test-race test-coverage test-tdd
 
 # Format code
 fmt:
@@ -130,3 +134,9 @@ test-race:
 test-coverage: test
 	@$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "✓ Coverage report generated: coverage.html"
+
+# Run tests with TDD Guard reporter
+test-tdd:
+	@echo "Running tests with TDD Guard reporter..."
+	@$(GO) test -json ./... 2>&1 | $(shell go env GOPATH)/bin/tdd-guard-go -project-root $(PWD)
+	@echo "✓ TDD Guard tests completed"

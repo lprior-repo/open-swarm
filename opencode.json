@@ -6,12 +6,9 @@
 
   "provider": {
     "anthropic": {
-      "apiKey": "{env:ANTHROPIC_API_KEY}",
-      "disabled": false
-    },
-    "openai": {
-      "apiKey": "{env:OPENAI_API_KEY}",
-      "disabled": false
+      "options": {
+        "apiKey": "{env:ANTHROPIC_API_KEY}"
+      }
     }
   },
 
@@ -43,9 +40,14 @@
   },
 
   "formatter": {
-    "*.go": "gofmt -w",
-    "*.json": "prettier --write",
-    "*.md": "prettier --write"
+    "gofmt": {
+      "command": ["gofmt", "-w", "$FILE"],
+      "extensions": [".go"]
+    },
+    "prettier": {
+      "command": ["prettier", "--write", "$FILE"],
+      "extensions": [".json", ".md"]
+    }
   },
 
   "mcp": {
@@ -79,6 +81,20 @@
   ],
 
   "agent": {
+    "validator": {
+      "description": "Validation engine using Claude Opus 4.5 for rigorous code verification",
+      "mode": "subagent",
+      "model": "anthropic/claude-opus-4-5",
+      "temperature": 0.1,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "read": true,
+        "bash": true,
+        "serena_*": true
+      },
+      "prompt": "You are a validation engine using Claude Opus 4.5 for rigorous verification. Perform deep analysis of code correctness, security vulnerabilities, architectural soundness, test coverage, and requirement compliance. Use advanced reasoning to identify subtle bugs, edge cases, and potential issues."
+    },
     "coordinator": {
       "description": "Multi-agent coordination specialist using Agent Mail and Beads",
       "mode": "subagent",
@@ -119,6 +135,11 @@
   },
 
   "command": {
+    "validate": {
+      "description": "Deep validation using Claude Opus 4.5",
+      "template": "Perform rigorous validation of $ARGUMENTS using Claude Opus 4.5. Check: correctness, security vulnerabilities, edge cases, test coverage, architectural soundness, requirement compliance, and subtle bugs.",
+      "agent": "validator"
+    },
     "sync": {
       "description": "Synchronize with Agent Mail coordination state",
       "template": "Register this agent with Agent Mail and fetch recent coordination messages. Project key: {env:PWD}. Check inbox, file reservations, and active agents."
