@@ -1,0 +1,164 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "model": "anthropic/claude-sonnet-4-5",
+  "small_model": "anthropic/claude-haiku-4-5",
+
+  "provider": {
+    "anthropic": {
+      "apiKey": "{env:ANTHROPIC_API_KEY}",
+      "disabled": false
+    },
+    "openai": {
+      "apiKey": "{env:OPENAI_API_KEY}",
+      "disabled": false
+    }
+  },
+
+  "tools": {
+    "write": true,
+    "edit": true,
+    "read": true,
+    "bash": true,
+    "grep": true,
+    "glob": true,
+    "list": true,
+    "serena_*": true,
+    "agent-mail_*": true
+  },
+
+  "permission": {
+    "write": "allow",
+    "edit": "allow",
+    "bash": {
+      "*": "ask",
+      "git *": "allow",
+      "go *": "allow",
+      "make *": "allow",
+      "bd *": "allow"
+    },
+    "agent-mail_send_message": "ask",
+    "agent-mail_file_reservation_paths": "allow",
+    "agent-mail_release_file_reservations": "allow"
+  },
+
+  "formatter": {
+    "*.go": "gofmt -w",
+    "*.json": "prettier --write",
+    "*.md": "prettier --write"
+  },
+
+  "mcp": {
+    "agent-mail": {
+      "type": "local",
+      "command": ["python", "-m", "mcp_agent_mail.server"],
+      "enabled": true,
+      "environment": {
+        "AGENT_MAIL_DB": "{env:HOME}/.agent-mail/mail.db",
+        "AGENT_MAIL_ARCHIVE": "{env:HOME}/.agent-mail/archive",
+        "AGENT_MAIL_HTTP_PORT": "8765"
+      }
+    },
+    "serena": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--cwd",
+        "{env:PWD}"
+      ],
+      "enabled": true
+    }
+  },
+
+  "instructions": [
+    "AGENTS.md"
+  ],
+
+  "agent": {
+    "coordinator": {
+      "description": "Multi-agent coordination specialist using Agent Mail and Beads",
+      "mode": "subagent",
+      "model": "anthropic/claude-sonnet-4-5",
+      "temperature": 0.3,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "agent-mail_*": true
+      },
+      "prompt": "You specialize in coordinating multiple agents using Agent Mail for messaging and file reservations, and Beads for task management. Focus on communication, task assignment, and conflict resolution."
+    },
+    "reviewer": {
+      "description": "Code review specialist for Go projects",
+      "mode": "subagent",
+      "model": "anthropic/claude-sonnet-4-5",
+      "temperature": 0.2,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "read": true,
+        "serena_*": true
+      },
+      "prompt": "You are a Go code review expert. Focus on: security vulnerabilities, performance issues, idiomatic Go patterns, error handling, test coverage, and Clean Architecture principles."
+    },
+    "tester": {
+      "description": "Test writing specialist for Go",
+      "mode": "subagent",
+      "model": "anthropic/claude-sonnet-4-5",
+      "temperature": 0.3,
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": true
+      },
+      "prompt": "You write comprehensive Go tests using table-driven patterns. Focus on unit tests, integration tests, mocking interfaces, and achieving high coverage."
+    }
+  },
+
+  "command": {
+    "sync": {
+      "description": "Synchronize with Agent Mail coordination state",
+      "template": "Register this agent with Agent Mail and fetch recent coordination messages. Project key: {env:PWD}. Check inbox, file reservations, and active agents."
+    },
+    "reserve": {
+      "description": "Reserve files for exclusive editing via Agent Mail",
+      "template": "Reserve files matching pattern: $ARGUMENTS. Use exclusive=true, TTL=3600 seconds. Project: {env:PWD}"
+    },
+    "release": {
+      "description": "Release file reservations",
+      "template": "Release all file reservations for this agent in project {env:PWD}"
+    },
+    "task-ready": {
+      "description": "Check for ready work in Beads",
+      "template": "Run 'bd ready --json' and analyze the output. Show unblocked tasks ready to work on."
+    },
+    "task-start": {
+      "description": "Start work on a Beads task",
+      "template": "Update Beads task $ARGUMENTS to status 'in_progress'. Reserve related files via Agent Mail. Report task details."
+    },
+    "task-complete": {
+      "description": "Complete a Beads task",
+      "template": "Close Beads task $ARGUMENTS with reason. Release file reservations. Update thread in Agent Mail if applicable."
+    },
+    "review": {
+      "description": "Comprehensive code review",
+      "template": "Review $ARGUMENTS for: security issues, performance problems, Go best practices, error handling, test coverage. Use @reviewer agent.",
+      "agent": "reviewer"
+    }
+  },
+
+  "keybinds": {
+    "leader": "ctrl+x"
+  },
+
+  "tui": {
+    "scroll_speed": 1.5
+  },
+
+  "share": "manual",
+  "autoupdate": true,
+  "theme": "opencode"
+}

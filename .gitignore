@@ -1,0 +1,57 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Build artifacts
+dist/
+build/
+
+# Beads - SQLite cache (not source of truth)
+.beads/*.db
+.beads/*.db-shm
+.beads/*.db-wal
+
+# Note: .beads/issues.jsonl IS committed (Git-backed source of truth)
+
+# OpenCode cache and state
+.opencode/.cache/
+.opencode/.state/
+
+# Agent Mail archive (managed separately, not in project repo)
+# Agent Mail stores in ~/.agent-mail/ by default
