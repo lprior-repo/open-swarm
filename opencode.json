@@ -23,7 +23,8 @@
     "webfetch": true,
     "serena_*": true,
     "agent-mail_*": true,
-    "beads_*": true
+    "beads_*": true,
+    "tdd-guard_*": true
   },
 
   "permission": {
@@ -34,7 +35,8 @@
     "webfetch": "allow",
     "agent-mail_*": "allow",
     "beads_*": "allow",
-    "serena_*": "allow"
+    "serena_*": "allow",
+    "tdd-guard_*": "allow"
   },
 
   "formatter": {
