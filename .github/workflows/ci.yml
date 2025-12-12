@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25.4'
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          args: --timeout=5m
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25.4'
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.out
+          fail_ci_if_error: false
+
+  build:
+    name: Build Binaries
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    strategy:
+      matrix:
+        include:
+          - binary: open-swarm
+            path: cmd/open-swarm
+          - binary: reactor
+            path: cmd/reactor
+          - binary: reactor-client
+            path: cmd/reactor-client
+          - binary: temporal-worker
+            path: cmd/temporal-worker
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25.4'
+
+      - name: Build ${{ matrix.binary }}
+        run: |
+          mkdir -p bin
+          go build -o bin/${{ matrix.binary }} ./${{ matrix.path }}
+
+      - name: Upload ${{ matrix.binary }} artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.binary }}-binary
+          path: bin/${{ matrix.binary }}
+          retention-days: 7
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25.4'
+
+      - name: Start Docker Compose services
+        run: docker-compose up -d
+
+      - name: Wait for services to be healthy
+        run: |
+          for i in {1..60}; do
+            docker-compose ps | grep -q "healthy" && echo "Services are healthy" && exit 0
+            echo "Waiting for services to be healthy... ($i/60)"
+            sleep 2
+          done
+          echo "Timeout waiting for services to be healthy"
+          docker-compose logs
+          exit 1
+
+      - name: Run integration tests
+        run: go test -v -tags=integration ./tests
+
+      - name: Collect Docker Compose logs
+        if: failure()
+        run: |
+          echo "Docker Compose logs:"
+          docker-compose logs
+
+      - name: Stop Docker Compose services
+        if: always()
+        run: docker-compose down -v
