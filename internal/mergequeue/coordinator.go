@@ -354,7 +354,7 @@ func (c *Coordinator) killFailedBranch(_ context.Context, branchID string, reaso
 }
 
 // killDependentBranches recursively kills all child branches when a parent fails
-func (c *Coordinator) killDependentBranches(_ context.Context, branchID string) error {
+func (c *Coordinator) killDependentBranches(ctx context.Context, branchID string) error {
 	c.mu.Lock()
 	branch, exists := c.activeBranches[branchID]
 	if !exists {
