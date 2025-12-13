@@ -78,46 +78,72 @@ func TddDagWorkflow(ctx workflow.Context, input DAGWorkflowInput) error {
 	}
 }
 
+// dagState holds mutable state for DAG execution
+type dagState struct {
+	taskMap        map[string]Task
+	flatOrder      []string
+	completed      map[string]bool
+	pendingFutures map[string]workflow.Future
+	failedTasks    []string
+}
+
 // runDag executes tasks in topological order with parallelism
 func runDag(ctx workflow.Context, tasks []Task) error {
 	logger := workflow.GetLogger(ctx)
 
-	// 1. Build Graph & Toposort (The Math)
-	taskMap := make(map[string]Task)
-	edges := make([]toposort.Edge, 0)
-
-	for _, t := range tasks {
-		taskMap[t.Name] = t
+	flatOrder, err := buildDAGOrder(tasks)
+	if err != nil {
+		return err
 	}
 
-	// Build edges: [dependency, dependent]
+	logger.Info("DAG Toposort Complete", "order", flatOrder)
+
+	state := &dagState{
+		taskMap:        buildTaskMap(tasks),
+		flatOrder:      flatOrder,
+		completed:      make(map[string]bool),
+		pendingFutures: make(map[string]workflow.Future),
+		failedTasks:    make([]string, 0),
+	}
+
+	ctx = workflow.WithActivityOptions(ctx, buildActivityOptions())
+
+	return executeDAG(ctx, logger, state, tasks)
+}
+
+// buildDAGOrder builds edges and performs topological sort
+func buildDAGOrder(tasks []Task) ([]string, error) {
+	edges := make([]toposort.Edge, 0)
 	for _, t := range tasks {
 		for _, dep := range t.Deps {
 			edges = append(edges, toposort.Edge{dep, t.Name})
 		}
 	}
 
-	// Perform topological sort
 	sortedNodes, err := toposort.Toposort(edges)
 	if err != nil {
-		return fmt.Errorf("cycle detected in DAG: %w", err)
+		return nil, fmt.Errorf("cycle detected in DAG: %w", err)
 	}
 
-	// Convert sorted nodes to task names
 	flatOrder := make([]string, 0, len(sortedNodes))
 	for _, node := range sortedNodes {
 		flatOrder = append(flatOrder, node.(string))
 	}
+	return flatOrder, nil
+}
 
-	logger.Info("DAG Toposort Complete", "order", flatOrder)
+// buildTaskMap creates a map of task names to tasks
+func buildTaskMap(tasks []Task) map[string]Task {
+	taskMap := make(map[string]Task)
+	for _, t := range tasks {
+		taskMap[t.Name] = t
+	}
+	return taskMap
+}
 
-	// 2. Execution Loop with Parallel Task Launching
-	completed := make(map[string]bool)
-	pendingFutures := make(map[string]workflow.Future)
-	failedTasks := make([]string, 0)
-
-	// Activity options
-	ao := workflow.ActivityOptions{
+// buildActivityOptions creates configured activity options
+func buildActivityOptions() workflow.ActivityOptions {
+	return workflow.ActivityOptions{
 		StartToCloseTimeout: DAGStartToCloseTimeout,
 		HeartbeatTimeout:    DAGHeartbeatTimeout,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -127,72 +153,87 @@ func runDag(ctx workflow.Context, tasks []Task) error {
 			MaximumAttempts:    DAGRetryMaxAttempts,
 		},
 	}
-	ctx = workflow.WithActivityOptions(ctx, ao)
+}
 
+// executeDAG runs the main execution loop
+func executeDAG(ctx workflow.Context, logger workflow.Logger, state *dagState, tasks []Task) error {
 	shellActivities := &ShellActivities{}
 
-	for len(completed) < len(tasks) {
-		// Check what is runnable
-		for _, taskName := range flatOrder {
-			if completed[taskName] || pendingFutures[taskName] != nil {
-				continue
+	for len(state.completed) < len(tasks) {
+		launchRunnableTasks(ctx, logger, state, shellActivities)
+
+		if len(state.pendingFutures) > 0 {
+			if err := waitForTaskCompletion(ctx, logger, state); err != nil {
+				return err
 			}
-
-			// Are all dependencies met?
-			canRun := true
-			for _, dep := range taskMap[taskName].Deps {
-				if !completed[dep] {
-					canRun = false
-					break
-				}
-			}
-
-			if canRun {
-				// START ACTIVITY - Execute shell command
-				logger.Info("Starting task", "name", taskName)
-				cmd := taskMap[taskName].Command
-				f := workflow.ExecuteActivity(ctx, shellActivities.RunScript, cmd)
-				pendingFutures[taskName] = f
-			}
-		}
-
-		// Wait for next completion using selector
-		selector := workflow.NewSelector(ctx)
-
-		for name := range pendingFutures {
-			taskName := name
-			taskFuture := pendingFutures[taskName]
-
-			selector.AddFuture(taskFuture, func(f workflow.Future) {
-				var output string
-				err := f.Get(ctx, &output)
-
-				if err != nil {
-					logger.Error("Task failed", "name", taskName, "error", err)
-					// Track failed task but don't break yet - let other pending tasks complete
-					failedTasks = append(failedTasks, taskName)
-				} else {
-					logger.Info("Task completed", "name", taskName, "output", output)
-					completed[taskName] = true
-				}
-
-				delete(pendingFutures, taskName)
-			})
-		}
-
-		if len(pendingFutures) > 0 {
-			selector.Select(ctx)
-
-			// Check if any task failed - if so, abort DAG execution
-			if len(failedTasks) > 0 {
-				return fmt.Errorf("tasks failed: %v", failedTasks)
-			}
-		} else if len(completed) < len(tasks) {
-			// Deadlock check (shouldn't happen with valid toposort)
+		} else if len(state.completed) < len(tasks) {
 			return fmt.Errorf("DAG stalled - no tasks runnable")
 		}
 	}
 
-	logger.Info("DAG Execution Complete", "tasksCompleted", len(completed))
+	logger.Info("DAG Execution Complete", "tasksCompleted", len(state.completed))
 	return nil
+}
+
+// launchRunnableTasks launches all tasks whose dependencies are met
+func launchRunnableTasks(ctx workflow.Context, logger workflow.Logger, state *dagState, activities *ShellActivities) {
+	for _, taskName := range state.flatOrder {
+		if state.completed[taskName] || state.pendingFutures[taskName] != nil {
+			continue
+		}
+
+		if allDependenciesCompleted(state, taskName) {
+			logger.Info("Starting task", "name", taskName)
+			cmd := state.taskMap[taskName].Command
+			f := workflow.ExecuteActivity(ctx, activities.RunScript, cmd)
+			state.pendingFutures[taskName] = f
+		}
+	}
+}
+
+// allDependenciesCompleted checks if all dependencies for a task are complete
+func allDependenciesCompleted(state *dagState, taskName string) bool {
+	for _, dep := range state.taskMap[taskName].Deps {
+		if !state.completed[dep] {
+			return false
+		}
+	}
+	return true
+}
+
+// waitForTaskCompletion waits for at least one task to complete
+func waitForTaskCompletion(ctx workflow.Context, logger workflow.Logger, state *dagState) error {
+	selector := workflow.NewSelector(ctx)
+
+	for name := range state.pendingFutures {
+		taskName := name
+		taskFuture := state.pendingFutures[taskName]
+
+		selector.AddFuture(taskFuture, func(f workflow.Future) {
+			handleTaskResult(logger, state, taskName, f, ctx)
+		})
+	}
+
+	selector.Select(ctx)
+
+	if len(state.failedTasks) > 0 {
+		return fmt.Errorf("tasks failed: %v", state.failedTasks)
+	}
+	return nil
+}
+
+// handleTaskResult processes the result of a completed task
+func handleTaskResult(logger workflow.Logger, state *dagState, taskName string, f workflow.Future, ctx workflow.Context) {
+	var output string
+	err := f.Get(ctx, &output)
+
+	if err != nil {
+		logger.Error("Task failed", "name", taskName, "error", err)
+		state.failedTasks = append(state.failedTasks, taskName)
+	} else {
+		logger.Info("Task completed", "name", taskName, "output", output)
+		state.completed[taskName] = true
+	}
+
+	delete(state.pendingFutures, taskName)
 }

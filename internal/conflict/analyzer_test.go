@@ -72,7 +72,7 @@ func TestCheckConflict_ExclusiveConflict(t *testing.T) {
 	assert.Equal(t, "foo.go", conflict.RequestedPattern)
 	assert.Len(t, conflict.Holders, 1)
 	assert.Equal(t, "AgentA", conflict.Holders[0].AgentName)
-	assert.Equal(t, ConflictTypeExclusiveExclusive, conflict.ConflictType)
+	assert.Equal(t, TypeExclusiveExclusive, conflict.ConflictType)
 }
 
 func TestCheckConflict_SkipsOwnReservations(t *testing.T) {
@@ -112,7 +112,7 @@ func TestCheckConflict_ExclusiveVsShared(t *testing.T) {
 	conflict, err := analyzer.CheckConflict(context.Background(), "AgentB", "foo.go", true, reservations)
 	require.NoError(t, err)
 	require.NotNil(t, conflict)
-	assert.Equal(t, ConflictTypeExclusiveShared, conflict.ConflictType)
+	assert.Equal(t, TypeExclusiveShared, conflict.ConflictType)
 }
 
 func TestSuggestResolution_Wait(t *testing.T) {
@@ -177,7 +177,7 @@ func TestFormatConflictReport_WithConflict(t *testing.T) {
 	conflict := &Conflict{
 		Requestor:        "AgentB",
 		RequestedPattern: "foo.go",
-		ConflictType:     ConflictTypeExclusiveExclusive,
+		ConflictType:     TypeExclusiveExclusive,
 		Holders: []Holder{
 			{
 				AgentName:     "AgentA",
@@ -207,7 +207,7 @@ func TestConflictType_Expiring(t *testing.T) {
 	}
 
 	conflictType := analyzer.determineConflictType(true, holders)
-	assert.Equal(t, ConflictTypeExpiring, conflictType)
+	assert.Equal(t, TypeExpiring, conflictType)
 }
 
 func TestConflictType_ExclusiveExclusive(t *testing.T) {
@@ -218,7 +218,7 @@ func TestConflictType_ExclusiveExclusive(t *testing.T) {
 	}
 
 	conflictType := analyzer.determineConflictType(true, holders)
-	assert.Equal(t, ConflictTypeExclusiveExclusive, conflictType)
+	assert.Equal(t, TypeExclusiveExclusive, conflictType)
 }
 
 func TestConflictType_ExclusiveShared(t *testing.T) {
@@ -229,5 +229,5 @@ func TestConflictType_ExclusiveShared(t *testing.T) {
 	}
 
 	conflictType := analyzer.determineConflictType(true, holders)
-	assert.Equal(t, ConflictTypeExclusiveShared, conflictType)
+	assert.Equal(t, TypeExclusiveShared, conflictType)
 }
