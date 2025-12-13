@@ -41,9 +41,6 @@ type Coordinator struct {
 	// Metrics
 	stats QueueStats
 
-	// Docker container manager
-	dockerManager *DockerManager
-
 	// Channels for coordination
 	changesChan  chan *ChangeRequest
 	resultsChan  chan *TestResult
@@ -100,20 +97,11 @@ func NewCoordinator(config CoordinatorConfig) *Coordinator {
 		config.TestTimeout = 5 * time.Minute
 	}
 
-	// Initialize Docker manager (log error but don't fail)
-	dockerManager, err := NewDockerManager()
-	if err != nil {
-		// Log warning: Docker functionality will be limited
-		// This allows the coordinator to still function without Docker
-		dockerManager = nil
-	}
-
 	return &Coordinator{
 		mainQueue:      make([]*ChangeRequest, 0),
 		bypassLane:     make([]*ChangeRequest, 0),
 		activeBranches: make(map[string]*SpeculativeBranch),
 		config:         config,
-		dockerManager:  dockerManager,
 		changesChan:    make(chan *ChangeRequest, defaultChannelCapacity),
 		resultsChan:    make(chan *TestResult, defaultChannelCapacity),
 		shutdownChan:   make(chan struct{}),
@@ -129,23 +117,10 @@ func (c *Coordinator) Start(ctx context.Context) error {
 
 // Stop gracefully shuts down the coordinator
 func (c *Coordinator) Stop() error {
-	var err error
 	c.shutdownOnce.Do(func() {
 		close(c.shutdownChan)
-
-		// Close Docker manager if it exists
-		if c.dockerManager != nil {
-			_ = c.dockerManager.Close()
-		}
-
-		// Close Docker manager if it exists
-		if c.dockerManager != nil {
-			if closeErr := c.dockerManager.Close(); closeErr != nil {
-				err = fmt.Errorf("failed to close docker manager: %w", closeErr)
-			}
-		}
 	})
-	return err
+	return nil
 }
 
 // Submit adds a change request to the queue
@@ -372,16 +347,8 @@ func (c *Coordinator) killFailedBranch(ctx context.Context, branchID string, rea
 		return nil
 	}
 
-	// Stop and remove Docker container if it exists
-	if c.dockerManager != nil && branch.ContainerID != "" {
-		// Create a background context for cleanup (don't use the potentially cancelled ctx)
-		cleanupCtx := context.Background()
-		if err := c.dockerManager.StopAndRemoveContainer(cleanupCtx, branch.ContainerID); err != nil {
-			// Log error but continue with other cleanup
-			// In production, this should use proper logging
-			_ = err
-		}
-	}
+	// TODO: Docker container cleanup removed - restore when DockerManager is implemented
+	// Container cleanup will be handled externally for now
 
 	// TODO: Cancel Temporal workflow
 
