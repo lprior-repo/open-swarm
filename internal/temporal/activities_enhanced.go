@@ -162,24 +162,28 @@ func (ea *EnhancedActivities) ExecuteLintTest(ctx context.Context, bootstrap *Bo
 	cell := cellActivities.reconstructCell(bootstrap)
 
 	// Run golangci-lint on test files
-	result, err := cell.Client.ExecuteCommand(ctx, "", "shell", []string{"golangci-lint", "run", "--disable-all", "--enable=errcheck,staticcheck,unused", "*_test.go"})
+	result, _ := cell.Client.ExecuteCommand(ctx, "", "shell", []string{"golangci-lint", "run", "--disable-all", "--enable=errcheck,staticcheck,unused", "*_test.go"})
 
-	lintPassed := err == nil
 	output := ""
 	if result != nil {
 		output = result.GetText()
 	}
 
+	// Parse lint output using LintParser
+	parser := NewLintParser()
+	parseResult := parser.ParseGolangciLint(output)
+
 	return &GateResult{
 		GateName: "lint_test",
-		Passed:   lintPassed,
+		Passed:   !parseResult.HasErrors,
 		LintResult: &LintResult{
-			Passed:   lintPassed,
+			Passed:   !parseResult.HasErrors,
 			Output:   output,
 			Duration: time.Since(startTime),
-			Issues:   []LintIssue{}, // Parse output for detailed issues if needed
+			Issues:   parseResult.Issues,
 		},
 		Duration: time.Since(startTime),
+		Message:  parseResult.Summary,
 	}, nil
 }
 
