@@ -75,7 +75,9 @@ func TestServerManager_BootServer_Integration(t *testing.T) {
 		return
 	}
 	require.NotNil(t, handle)
-	defer sm.Shutdown(handle)
+	defer func() {
+		_ = sm.Shutdown(handle)
+	}()
 
 	// Verify handle
 	assert.Equal(t, port, handle.Port)

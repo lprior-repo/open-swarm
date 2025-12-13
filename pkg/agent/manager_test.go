@@ -109,7 +109,7 @@ func TestCountActive(t *testing.T) {
 			Program: "opencode",
 			Model:   "sonnet-4.5",
 		}
-		manager.Register(agent)
+		_ = manager.Register(agent)
 	}
 
 	if count := manager.CountActive(); count != 3 {
@@ -126,7 +126,7 @@ func TestRemoveAgent(t *testing.T) {
 		Model:   "sonnet-4.5",
 	}
 
-	manager.Register(agent)
+	_ = manager.Register(agent)
 
 	// Verify agent exists
 	if _, exists := manager.Get("TestAgent"); !exists {
@@ -155,7 +155,7 @@ func TestUpdateAgent(t *testing.T) {
 		TaskDescription: "Original task",
 	}
 
-	manager.Register(agent)
+	_ = manager.Register(agent)
 
 	// Update agent
 	agent.TaskDescription = "Updated task"

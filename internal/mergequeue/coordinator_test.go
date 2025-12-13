@@ -43,7 +43,9 @@ func TestSubmitChange(t *testing.T) {
 
 	err := coord.Start(ctx)
 	require.NoError(t, err)
-	defer coord.Stop()
+	defer func() {
+		_ = coord.Stop()
+	}()
 
 	change := &ChangeRequest{
 		ID:            "agent-1",

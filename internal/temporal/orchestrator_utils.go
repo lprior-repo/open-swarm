@@ -106,12 +106,12 @@ func (lp *LintParser) ParseGolangciLint(output string) ParsedLintResult {
 
 	for _, line := range lines {
 		matches := pattern.FindStringSubmatch(line)
-		if matches != nil && len(matches) >= 6 {
+		if len(matches) >= 6 {
 			// Extract line and column numbers
 			lineNum := 0
 			colNum := 0
-			fmt.Sscanf(matches[2], "%d", &lineNum)
-			fmt.Sscanf(matches[3], "%d", &colNum)
+			_, _ = fmt.Sscanf(matches[2], "%d", &lineNum)
+			_, _ = fmt.Sscanf(matches[3], "%d", &colNum)
 
 			issue := LintIssue{
 				File:     matches[1],
