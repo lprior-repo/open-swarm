@@ -264,12 +264,17 @@ type StressTestResult struct {
 // StressTestWorkflow runs multiple agents in parallel for stress testing
 func StressTestWorkflow(ctx workflow.Context, input StressTestInput) (*StressTestResult, error) {
 	logger := workflow.GetLogger(ctx)
-	logger.Info("Starting Stress Test Workflow", "num_agents", input.NumAgents)
-	
+	logger.Info("Starting Stress Test Workflow",
+		"num_agents", input.NumAgents,
+		"agent", input.Agent,
+		"model", input.Model,
+		"concurrency_limit", input.ConcurrencyLimit)
+
 	startTime := workflow.Now(ctx)
-	
+
+	// Set defaults
 	if input.TimeoutSeconds == 0 {
-		input.TimeoutSeconds = 300
+		input.TimeoutSeconds = 300 // 5 minutes
 	}
 	if input.Agent == "" {
 		input.Agent = "general"
@@ -277,15 +282,146 @@ func StressTestWorkflow(ctx workflow.Context, input StressTestInput) (*StressTes
 	if input.Model == "" {
 		input.Model = "anthropic/claude-sonnet-4-5"
 	}
-	
+
+	// Configure activity options for agent invocations
+	activityOptions := workflow.ActivityOptions{
+		StartToCloseTimeout: time.Duration(input.TimeoutSeconds) * time.Second,
+		HeartbeatTimeout:    5 * time.Minute, // 5 minutes for LLM responses
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2.0,
+			MaximumInterval:    time.Minute,
+			MaximumAttempts:    3,
+		},
+	}
+	ctx = workflow.WithActivityOptions(ctx, activityOptions)
+
+	// Initialize result
 	result := &StressTestResult{
 		TotalAgents: input.NumAgents,
 		Results:     make([]AgentInvokeResult, 0, input.NumAgents),
 		Errors:      make([]string, 0),
 	}
-	
-	logger.Info("Stress test completed", "total", result.TotalAgents)
+
+	// Create agent activities
+	agentActivities := NewAgentActivities()
+
+	// Track pending futures
+	type agentExecution struct {
+		future workflow.Future
+		index  int
+	}
+
+	pendingExecutions := make([]agentExecution, 0, input.NumAgents)
+
+	// Launch agents
+	if input.ConcurrencyLimit > 0 {
+		// Controlled concurrency: launch in batches
+		logger.Info("Launching agents with concurrency control", "limit", input.ConcurrencyLimit)
+
+		for batch := 0; batch < input.NumAgents; batch += input.ConcurrencyLimit {
+			batchSize := input.ConcurrencyLimit
+			if batch+batchSize > input.NumAgents {
+				batchSize = input.NumAgents - batch
+			}
+
+			batchFutures := make([]agentExecution, batchSize)
+
+			// Launch batch
+			for i := 0; i < batchSize; i++ {
+				agentIndex := batch + i
+				agentInput := &AgentInvokeInput{
+					Bootstrap:      input.Bootstrap,
+					Prompt:         fmt.Sprintf("%s (Agent %d/%d)", input.Prompt, agentIndex+1, input.NumAgents),
+					Agent:          input.Agent,
+					Model:          input.Model,
+					Title:          fmt.Sprintf("Stress Test Agent %d", agentIndex+1),
+					TimeoutSeconds: input.TimeoutSeconds,
+					StreamOutput:   false,
+				}
+
+				future := workflow.ExecuteActivity(ctx, agentActivities.InvokeAgent, agentInput)
+				batchFutures[i] = agentExecution{future: future, index: agentIndex}
+			}
+
+			// Wait for batch to complete
+			for _, exec := range batchFutures {
+				var agentResult *AgentInvokeResult
+				err := exec.future.Get(ctx, &agentResult)
+
+				if err != nil {
+					result.Failed++
+					result.Errors = append(result.Errors, fmt.Sprintf("Agent %d failed: %v", exec.index+1, err))
+					logger.Error("Agent failed", "index", exec.index+1, "error", err)
+				} else {
+					if agentResult.Success {
+						result.Successful++
+					} else {
+						result.Failed++
+						result.Errors = append(result.Errors, fmt.Sprintf("Agent %d returned error: %s", exec.index+1, agentResult.Error))
+					}
+					result.Results = append(result.Results, *agentResult)
+				}
+			}
+
+			logger.Info("Batch completed", "batch", batch/input.ConcurrencyLimit+1, "completed", result.Successful+result.Failed, "total", input.NumAgents)
+		}
+	} else {
+		// Unlimited concurrency: launch all at once
+		logger.Info("Launching all agents in parallel")
+
+		for i := 0; i < input.NumAgents; i++ {
+			agentInput := &AgentInvokeInput{
+				Bootstrap:      input.Bootstrap,
+				Prompt:         fmt.Sprintf("%s (Agent %d/%d)", input.Prompt, i+1, input.NumAgents),
+				Agent:          input.Agent,
+				Model:          input.Model,
+				Title:          fmt.Sprintf("Stress Test Agent %d", i+1),
+				TimeoutSeconds: input.TimeoutSeconds,
+				StreamOutput:   false,
+			}
+
+			future := workflow.ExecuteActivity(ctx, agentActivities.InvokeAgent, agentInput)
+			pendingExecutions = append(pendingExecutions, agentExecution{future: future, index: i})
+		}
+
+		// Wait for all to complete
+		for _, exec := range pendingExecutions {
+			var agentResult *AgentInvokeResult
+			err := exec.future.Get(ctx, &agentResult)
+
+			if err != nil {
+				result.Failed++
+				result.Errors = append(result.Errors, fmt.Sprintf("Agent %d failed: %v", exec.index+1, err))
+				logger.Error("Agent failed", "index", exec.index+1, "error", err)
+			} else {
+				if agentResult.Success {
+					result.Successful++
+				} else {
+					result.Failed++
+					result.Errors = append(result.Errors, fmt.Sprintf("Agent %d returned error: %s", exec.index+1, agentResult.Error))
+				}
+				result.Results = append(result.Results, *agentResult)
+			}
+		}
+	}
+
+	// Calculate statistics
 	result.TotalDuration = workflow.Now(ctx).Sub(startTime)
-	
+	if len(result.Results) > 0 {
+		var totalDuration time.Duration
+		for _, r := range result.Results {
+			totalDuration += r.Duration
+		}
+		result.AverageDuration = totalDuration / time.Duration(len(result.Results))
+	}
+
+	logger.Info("Stress Test Workflow Completed",
+		"total_agents", result.TotalAgents,
+		"successful", result.Successful,
+		"failed", result.Failed,
+		"total_duration", result.TotalDuration,
+		"average_duration", result.AverageDuration)
+
 	return result, nil
 }
