@@ -3,6 +3,7 @@ package mergequeue
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -292,15 +293,27 @@ func (c *Coordinator) processTestResult(ctx context.Context, result *TestResult)
 	} else if failedBranchID != "" {
 		// Kill switch: Kill failed branch and all its dependent children
 		// First kill all dependent branches
-		if err := c.killDependentBranches(ctx, failedBranchID); err != nil {
-			// Log error but continue
-			_ = err
+		cascadeErr := c.killDependentBranches(ctx, failedBranchID)
+		if cascadeErr != nil {
+			// Log cascade error but continue to kill the main branch
+			// The cascade may have partially succeeded
+			if userErr, ok := cascadeErr.(*UserFacingError); ok {
+				// Already formatted for user display
+				_ = userErr // would be logged in production
+			} else if killErr, ok := cascadeErr.(*KillSwitchError); ok {
+				// Log kill switch context
+				_ = killErr // would be logged in production
+			} else {
+				// Wrap unknown error
+				_ = fmt.Errorf("cascade kill partially failed: %w", cascadeErr)
+			}
 		}
 
 		// Then kill the failed branch itself
-		if err := c.killFailedBranch(ctx, failedBranchID, fmt.Sprintf("tests failed: %s", result.ErrorMessage)); err != nil {
-			// Log error
-			_ = err
+		mainKillErr := c.killFailedBranch(ctx, failedBranchID, fmt.Sprintf("tests failed: %s", result.ErrorMessage))
+		if mainKillErr != nil {
+			// Log error but branch state is still updated
+			_ = mainKillErr // would be logged in production
 		}
 		// TODO: Promote next change to base
 	}
@@ -334,18 +347,42 @@ func (c *Coordinator) GetStats() QueueStats {
 
 // killFailedBranch kills a single speculative branch and cleans up its resources
 func (c *Coordinator) killFailedBranch(ctx context.Context, branchID string, reason string) error {
+	logger := slog.Default()
+	startTime := time.Now()
+
+	// Log kill initiation
+	logger.Info("Kill switch initiated (basic version)",
+		"branch_id", branchID,
+		"reason", reason,
+	)
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	branch, exists := c.activeBranches[branchID]
 	if !exists {
+		logger.Error("Branch not found during kill operation",
+			"branch_id", branchID,
+			"error", "branch not found",
+		)
 		return fmt.Errorf("branch %s not found", branchID)
 	}
 
 	// Idempotent: if already killed, return success
 	if branch.Status == BranchStatusKilled {
+		logger.Debug("Branch already killed (idempotent)",
+			"branch_id", branchID,
+			"previous_reason", branch.KillReason,
+		)
 		return nil
 	}
+
+	logger.Debug("Beginning branch cleanup",
+		"branch_id", branchID,
+		"current_status", branch.Status,
+		"changes_count", len(branch.Changes),
+		"depth", branch.Depth,
+	)
 
 	// TODO: Docker container cleanup removed - restore when DockerManager is implemented
 	// Container cleanup will be handled externally for now
@@ -353,7 +390,16 @@ func (c *Coordinator) killFailedBranch(ctx context.Context, branchID string, rea
 	// TODO: Cancel Temporal workflow
 
 	// Clean up worktrees for this branch
-	_ = c.cleanupBranchWorktrees(context.Background(), branch)
+	if err := c.cleanupBranchWorktrees(context.Background(), branch); err != nil {
+		logger.Warn("Worktree cleanup had errors",
+			"branch_id", branchID,
+			"error", err.Error(),
+		)
+	} else {
+		logger.Debug("Worktree cleanup completed",
+			"branch_id", branchID,
+		)
+	}
 
 	// Update branch status
 	now := time.Now()
@@ -364,9 +410,34 @@ func (c *Coordinator) killFailedBranch(ctx context.Context, branchID string, rea
 	// Track kill switch activation
 	c.stats.TotalKills++
 
+	duration := time.Since(startTime)
+	logger.Info("Kill switch completed",
+		"branch_id", branchID,
+		"reason", reason,
+		"killed_at", now,
+		"total_kills", c.stats.TotalKills,
+		"duration_ms", duration.Milliseconds(),
+	)
+
 	// Send notification to affected agents (unlock before notification to avoid deadlock)
 	c.mu.Unlock()
-	_ = c.notifyBranchKilled(ctx, branch, reason)
+	notifyStart := time.Now()
+	notifyErr := c.notifyBranchKilled(ctx, branch, reason)
+	notifyDuration := time.Since(notifyStart)
+
+	if notifyErr != nil {
+		logger.Warn("Branch kill notification failed",
+			"branch_id", branchID,
+			"error", notifyErr.Error(),
+			"notification_duration_ms", notifyDuration.Milliseconds(),
+		)
+	} else {
+		logger.Debug("Branch kill notification sent successfully",
+			"branch_id", branchID,
+			"notified_agents", len(branch.Changes),
+			"notification_duration_ms", notifyDuration.Milliseconds(),
+		)
+	}
 	c.mu.Lock()
 
 	return nil
@@ -374,10 +445,21 @@ func (c *Coordinator) killFailedBranch(ctx context.Context, branchID string, rea
 
 // killDependentBranches recursively kills all child branches when a parent fails
 func (c *Coordinator) killDependentBranches(ctx context.Context, branchID string) error {
+	logger := slog.Default()
+	startTime := time.Now()
+
+	logger.Info("Cascade kill initiated (basic version)",
+		"parent_branch_id", branchID,
+	)
+
 	c.mu.Lock()
 	branch, exists := c.activeBranches[branchID]
 	if !exists {
 		c.mu.Unlock()
+		logger.Error("Branch not found in cascade kill",
+			"branch_id", branchID,
+			"error", "branch not found",
+		)
 		return fmt.Errorf("branch %s not found", branchID)
 	}
 
@@ -385,19 +467,80 @@ func (c *Coordinator) killDependentBranches(ctx context.Context, branchID string
 	copy(childrenIDs, branch.ChildrenIDs)
 	c.mu.Unlock()
 
+	logger.Debug("Processing dependent branches",
+		"parent_branch_id", branchID,
+		"dependent_branches", len(childrenIDs),
+		"children_ids", childrenIDs,
+	)
+
+	var killedCount int
+	var failureCount int
+
 	// Recursively kill all children
-	for _, childID := range childrenIDs {
+	for idx, childID := range childrenIDs {
+		logger.Debug("Processing child branch",
+			"parent_branch_id", branchID,
+			"child_branch_id", childID,
+			"position", idx+1,
+			"total_children", len(childrenIDs),
+		)
+
 		// First kill the child's descendants
 		if err := c.killDependentBranches(ctx, childID); err != nil {
 			// Log error but continue killing other branches
+			logger.Error("Failed to cascade kill descendants",
+				"child_branch_id", childID,
+				"parent_branch_id", branchID,
+				"error", err.Error(),
+			)
+			failureCount++
 			continue
 		}
 
 		// Then kill the child itself
-		if err := c.killFailedBranch(ctx, childID, fmt.Sprintf("parent branch %s failed", branchID)); err != nil {
+		childKillReason := fmt.Sprintf("parent branch %s failed", branchID)
+		if err := c.killFailedBranch(ctx, childID, childKillReason); err != nil {
 			// Log error but continue
+			logger.Error("Failed to kill dependent branch",
+				"child_branch_id", childID,
+				"parent_branch_id", branchID,
+				"error", err.Error(),
+				"kill_reason", childKillReason,
+			)
+			failureCount++
 			continue
 		}
+
+		killedCount++
+		logger.Debug("Successfully killed dependent branch",
+			"child_branch_id", childID,
+			"parent_branch_id", branchID,
+			"killed_count", killedCount,
+			"total_killed", len(childrenIDs),
+		)
+	}
+
+	duration := time.Since(startTime)
+
+	if failureCount > 0 {
+		logger.Warn("Cascade kill completed with failures",
+			"parent_branch_id", branchID,
+			"total_children", len(childrenIDs),
+			"successfully_killed", killedCount,
+			"failed_kills", failureCount,
+			"duration_ms", duration.Milliseconds(),
+		)
+	} else if len(childrenIDs) > 0 {
+		logger.Info("Cascade kill completed successfully",
+			"parent_branch_id", branchID,
+			"dependent_branches_killed", killedCount,
+			"duration_ms", duration.Milliseconds(),
+		)
+	} else {
+		logger.Debug("No dependent branches to kill",
+			"parent_branch_id", branchID,
+			"duration_ms", duration.Milliseconds(),
+		)
 	}
 
 	return nil

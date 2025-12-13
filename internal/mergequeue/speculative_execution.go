@@ -2,6 +2,7 @@ package mergequeue
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -237,3 +238,267 @@ func (c *Coordinator) processBypassImpl(ctx context.Context, change *ChangeReque
 
 // Note: mergeSuccessfulBranch and cleanupBranchWorktrees are implemented in
 // coordinator_temporal.go and coordinator_worktree.go respectively
+
+// GetBranchAncestry returns the complete ancestry chain for a branch, from root to leaf.
+// Returns a slice of branch IDs in order from root to the specified branch.
+// Returns empty slice if branch not found.
+//
+// Example:
+//  Given hierarchy: Branch A -> Branch B -> Branch C
+//  GetBranchAncestry("branch-C") returns ["branch-A", "branch-B", "branch-C"]
+func (c *Coordinator) GetBranchAncestry(branchID string) []string {
+	c.mu.RLock()
+	branch, exists := c.activeBranches[branchID]
+	if !exists {
+		c.mu.RUnlock()
+		return []string{}
+	}
+
+	// Build ancestry chain from current branch back to root
+	ancestry := make([]string, 0)
+	current := branch
+	ancestry = append(ancestry, current.ID)
+
+	// Walk up the parent chain to the root
+	for current.ParentID != "" {
+		parent, parentExists := c.activeBranches[current.ParentID]
+		if !parentExists {
+			break
+		}
+		ancestry = append([]string{parent.ID}, ancestry...) // Prepend to maintain order
+		current = parent
+	}
+	c.mu.RUnlock()
+
+	return ancestry
+}
+
+// GetBranchDescendants returns all descendant branches (children, grandchildren, etc.) for a branch.
+// Returns a slice of branch IDs in breadth-first order.
+// Returns empty slice if branch not found.
+//
+// Example:
+//  Given hierarchy: Branch A -> Branch B -> Branch C
+//                              -> Branch D
+//  GetBranchDescendants("branch-A") returns ["branch-B", "branch-D", "branch-C"]
+func (c *Coordinator) GetBranchDescendants(branchID string) []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	branch, exists := c.activeBranches[branchID]
+	if !exists {
+		return []string{}
+	}
+
+	descendants := make([]string, 0)
+	queue := make([]string, len(branch.ChildrenIDs))
+	copy(queue, branch.ChildrenIDs)
+
+	// Breadth-first traversal
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		descendants = append(descendants, current)
+
+		if child, exists := c.activeBranches[current]; exists {
+			queue = append(queue, child.ChildrenIDs...)
+		}
+	}
+
+	return descendants
+}
+
+// GetBranchSiblings returns all sibling branches (branches with same parent).
+// Returns a slice of sibling branch IDs.
+// Returns empty slice if branch not found.
+//
+// Example:
+//  Given hierarchy: Branch A -> Branch B
+//                            -> Branch C
+//  GetBranchSiblings("branch-B") returns ["branch-C"]
+func (c *Coordinator) GetBranchSiblings(branchID string) []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	branch, exists := c.activeBranches[branchID]
+	if !exists {
+		return []string{}
+	}
+
+	// If no parent, this is a root branch (no siblings)
+	if branch.ParentID == "" {
+		return []string{}
+	}
+
+	parent, parentExists := c.activeBranches[branch.ParentID]
+	if !parentExists {
+		return []string{}
+	}
+
+	siblings := make([]string, 0)
+	for _, childID := range parent.ChildrenIDs {
+		if childID != branchID {
+			siblings = append(siblings, childID)
+		}
+	}
+
+	return siblings
+}
+
+// IsAncestorOf checks if one branch is an ancestor of another.
+// Returns true if ancestorID is in the parent chain of branchID.
+//
+// Example:
+//  Given hierarchy: Branch A -> Branch B -> Branch C
+//  IsAncestorOf("branch-A", "branch-C") returns true
+func (c *Coordinator) IsAncestorOf(ancestorID, branchID string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	current, exists := c.activeBranches[branchID]
+	if !exists {
+		return false
+	}
+
+	// Walk up the parent chain
+	for current.ParentID != "" {
+		if current.ParentID == ancestorID {
+			return true
+		}
+
+		parent, parentExists := c.activeBranches[current.ParentID]
+		if !parentExists {
+			break
+		}
+		current = parent
+	}
+
+	return false
+}
+
+// CascadeStatusUpdate updates a branch status and propagates the change to all descendants.
+// Useful for marking entire branch families as cancelled, suspended, etc.
+//
+// Example:
+//  CascadeStatusUpdate("branch-A", BranchStatusCancelled)
+//  This would mark branch A and all its descendants as cancelled
+func (c *Coordinator) CascadeStatusUpdate(branchID string, newStatus BranchStatus) error {
+	c.mu.Lock()
+	branch, exists := c.activeBranches[branchID]
+	if !exists {
+		c.mu.Unlock()
+		return fmt.Errorf("branch %s not found", branchID)
+	}
+
+	// Update current branch
+	branch.Status = newStatus
+
+	// Get children IDs before releasing lock
+	childrenIDs := make([]string, len(branch.ChildrenIDs))
+	copy(childrenIDs, branch.ChildrenIDs)
+	c.mu.Unlock()
+
+	// Recursively update all descendants
+	for _, childID := range childrenIDs {
+		if err := c.CascadeStatusUpdate(childID, newStatus); err != nil {
+			// Log error but continue updating remaining descendants
+			continue
+		}
+	}
+
+	return nil
+}
+
+// CollectBranchFamily returns all branches in the same family (root and all descendants).
+// Useful for bulk operations on related branches.
+//
+// Example:
+//  Given hierarchy: Branch A -> Branch B -> Branch C
+//  CollectBranchFamily("branch-B") returns ["branch-B", "branch-C"]
+//  CollectBranchFamily("branch-A") returns ["branch-A", "branch-B", "branch-C"]
+func (c *Coordinator) CollectBranchFamily(branchID string) []string {
+	c.mu.RLock()
+	branch, exists := c.activeBranches[branchID]
+	if !exists {
+		c.mu.RUnlock()
+		return []string{}
+	}
+
+	// First get the root of this family
+	current := branch
+	for current.ParentID != "" {
+		parent, parentExists := c.activeBranches[current.ParentID]
+		if !parentExists {
+			break
+		}
+		current = parent
+	}
+	c.mu.RUnlock()
+
+	// Now collect root and all its descendants
+	family := make([]string, 0)
+	family = append(family, current.ID)
+	family = append(family, c.GetBranchDescendants(current.ID)...)
+
+	return family
+}
+
+// BranchNode represents a node in the branch hierarchy tree structure.
+// Used by GetBranchHierarchy to return the complete tree of branches.
+type BranchNode struct {
+	ID       string
+	Depth    int
+	Status   BranchStatus
+	Children []*BranchNode
+}
+
+// GetBranchHierarchy returns the complete hierarchical structure rooted at the specified branch.
+// Includes the branch itself and all descendants in a tree representation.
+// Returns nil if branch not found.
+//
+// Example output:
+//  {
+//    "id": "branch-A",
+//    "children": [
+//      {
+//        "id": "branch-B",
+//        "children": [
+//          {"id": "branch-D", "children": []}
+//        ]
+//      },
+//      {
+//        "id": "branch-C",
+//        "children": []
+//      }
+//    ]
+//  }
+func (c *Coordinator) GetBranchHierarchy(branchID string) *BranchNode {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	branch, exists := c.activeBranches[branchID]
+	if !exists {
+		return nil
+	}
+
+	return c.buildBranchNode(branch)
+}
+
+// buildBranchNode recursively builds a tree node for a branch and its children
+func (c *Coordinator) buildBranchNode(branch *SpeculativeBranch) *BranchNode {
+	node := &BranchNode{
+		ID:       branch.ID,
+		Depth:    branch.Depth,
+		Status:   branch.Status,
+		Children: make([]*BranchNode, 0),
+	}
+
+	for _, childID := range branch.ChildrenIDs {
+		if child, exists := c.activeBranches[childID]; exists {
+			node.Children = append(node.Children, c.buildBranchNode(child))
+		}
+	}
+
+	return node
+}

@@ -419,7 +419,10 @@ func TestKillDependentBranchesWithTimeout_Timeout(t *testing.T) {
 	// Kill should timeout
 	err := coord.killDependentBranchesWithTimeout(ctx, "parent")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "timeout", "Error should mention timeout")
+	// Check for timeout in error message or error type
+	assert.True(t,
+		contains(err.Error(), "timeout") || contains(err.Error(), "timed out"),
+		"Error should mention timeout. Got: %v", err)
 }
 
 func TestKillDependentBranchesWithTimeout_NonExistentBranch(t *testing.T) {

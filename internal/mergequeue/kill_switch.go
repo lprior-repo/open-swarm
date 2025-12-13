@@ -7,16 +7,42 @@ package mergequeue
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 )
 
 // killFailedBranchWithTimeout kills a single speculative branch with timeout enforcement.
 //
-// # Kill Switch Component (Timeout-Aware Version)
+// # Kill Switch Component (Timeout-Aware Version) with Race Condition Protection
 //
 // This is an enhanced version of killFailedBranch that includes timeout enforcement
 // and graceful degradation. It prevents kill operations from blocking indefinitely
 // when resource cleanup (Temporal workflows, Docker containers) hangs or fails.
+//
+// # Race Condition Protection
+//
+// The implementation includes multiple layers of protection against concurrent kill attempts:
+//
+//  1. **Idempotency Check**: If a branch is already killed, returns immediately without
+//     acquiring the lock again or incrementing metrics. This prevents duplicate processing
+//     when multiple failures occur simultaneously.
+//
+//  2. **Atomic State Transition**: The status change to BranchStatusKilled is atomic within
+//     the critical section. No intermediate states are exposed to other goroutines.
+//
+//  3. **Metadata Atomicity**: KilledAt timestamp and KillReason are updated in the same
+//     critical section, ensuring consistency (no partial updates visible to readers).
+//
+//  4. **Metrics Safety**: TotalKills counter is incremented only once per branch, protected
+//     by the mutex and the idempotency check.
+//
+// # Concurrent Kill Attempts Detection
+//
+// If two goroutines try to kill the same branch simultaneously:
+//  - Both acquire the lock sequentially (Go's sync.Mutex ensures fairness)
+//  - First goroutine: Marks as killed, increments metrics
+//  - Second goroutine: Sees already-killed status, returns without side effects
+//  - Result: Metrics are accurate, no race conditions
 //
 // # Timeout Behavior
 //
@@ -40,6 +66,7 @@ import (
 //
 // This operation is idempotent - killing an already-killed branch is safe and returns no error.
 // The original kill metadata (KilledAt timestamp and KillReason) is preserved on subsequent calls.
+// No metrics are incremented on duplicate kills.
 //
 // # Example Usage
 //
@@ -67,11 +94,23 @@ func (c *Coordinator) killFailedBranchWithTimeout(ctx context.Context, branchID 
 
 		branch, exists := c.activeBranches[branchID]
 		if !exists {
-			resultChan <- killResult{err: fmt.Errorf("branch %s not found", branchID)}
+			resultChan <- killResult{
+				err: &KillSwitchError{
+					Operation:   "kill_single_branch",
+					BranchID:    branchID,
+					Err:         fmt.Errorf("branch not found"),
+					Recoverable: false,
+					Context:     "branch does not exist in active branches",
+				},
+			}
 			return
 		}
 
 		// Idempotent: if already killed, return success without modifying state
+		// This prevents:
+		// 1. Concurrent kill attempts from incrementing metrics multiple times
+		// 2. Overwriting original kill metadata with duplicate information
+		// 3. Race conditions between concurrent kill operations
 		if branch.Status == BranchStatusKilled {
 			resultChan <- killResult{err: nil}
 			return
@@ -81,13 +120,15 @@ func (c *Coordinator) killFailedBranchWithTimeout(ctx context.Context, branchID 
 		// TODO: Stop Docker container with timeout
 		// TODO: Clean up worktree with timeout
 
-		// Update branch status
+		// Atomically transition to Killed state with all metadata
+		// This ensures no goroutine sees a partially-updated branch
 		now := time.Now()
 		branch.Status = BranchStatusKilled
 		branch.KilledAt = &now
 		branch.KillReason = reason
 
-		// Track kill switch activation (only increment for new kills due to idempotency check above)
+		// Increment metrics atomically within the lock
+		// This ensures accurate counters even with concurrent operations
 		c.stats.TotalKills++
 
 		resultChan <- killResult{err: nil}
@@ -99,6 +140,8 @@ func (c *Coordinator) killFailedBranchWithTimeout(ctx context.Context, branchID 
 		return result.err
 	case <-killCtx.Done():
 		// Graceful degradation: mark as killed anyway even if cleanup timed out
+		// Use a separate lock acquisition to avoid deadlock if the goroutine above
+		// is still holding the lock
 		c.mu.Lock()
 		if branch, exists := c.activeBranches[branchID]; exists && branch.Status != BranchStatusKilled {
 			now := time.Now()
@@ -108,7 +151,14 @@ func (c *Coordinator) killFailedBranchWithTimeout(ctx context.Context, branchID 
 			c.stats.TotalKills++
 		}
 		c.mu.Unlock()
-		return fmt.Errorf("kill operation timed out after %v (branch marked as killed)", c.config.KillSwitchTimeout)
+		return &TimeoutError{
+		Step:              "kill_single_branch",
+		BranchID:          branchID,
+		ConfiguredTimeout: c.config.KillSwitchTimeout.Milliseconds(),
+		PartialProgress:   true,
+		CompletedSteps:    []string{"marked_as_killed"},
+		PendingSteps:      []string{"cleanup", "notification"},
+	}
 	}
 }
 
@@ -179,29 +229,59 @@ func (c *Coordinator) killDependentBranchesWithTimeout(ctx context.Context, bran
 }
 
 // killDependentBranchesRecursive performs the actual recursive kill operation with
-// context-aware timeout checking at each level of the hierarchy.
+// context-aware timeout checking and concurrent child processing.
 //
-// # Algorithm
+// # Algorithm with Concurrent Processing
 //
-// This function implements depth-first traversal with timeout checking:
+// This function implements depth-first traversal with timeout checking and concurrency:
 //  1. Checks if context is still valid (timeout not exceeded)
 //  2. Locks to read the branch's ChildrenIDs list
-//  3. Copies the list and unlocks
-//  4. For each child:
-//     a. Checks context validity again
+//  3. Copies the list and unlocks (snapshot prevents TOCTOU issues)
+//  4. For each child spawned in a goroutine:
+//     a. Checks context validity again (respects cascade timeout)
 //     b. Recursively kills the child's descendants (depth-first)
 //     c. Kills the child itself with killFailedBranchWithTimeout
-//  5. Returns first error encountered (but continues processing all children)
+//  5. Waits for all children to complete (sync.WaitGroup)
+//  6. Returns first error encountered (but all children are processed)
 //
-// # Thread Safety
+// # Thread Safety with Concurrency
 //
-// Uses the same lock-release-recurse pattern as killDependentBranches to avoid deadlocks.
-// Each recursive call acquires its own lock independently.
+// This implementation uses sync.WaitGroup to enable concurrent processing of sibling children:
+//  - Each child is processed in its own goroutine
+//  - No child modifications shared between goroutines (each has its own descendants)
+//  - sync.Mutex protects firstErr variable to safely capture errors
+//  - Context checks happen in each goroutine to respect timeouts
+//  - Lock-release-recurse pattern prevents deadlocks during recursion
+//
+// # Concurrent Kill Safety
+//
+// Multiple concurrent kill operations on different branches:
+//  - acquire separate locks for their respective branch snapshots
+//  - proceed independently if no parent-child conflicts
+//  - idempotency checks prevent issues if parent is killed before child
+//  - metrics are accurate due to atomic increments within locks
+//
+// # Race Condition Prevention
+//
+// The implementation protects against several classes of race conditions:
+//
+//  1. **TOCTOU (Time-of-Check-Time-of-Use)**: Children snapshot is created before
+//     releasing the lock, preventing the children list from changing during iteration.
+//
+//  2. **Concurrent Kills on Same Branch**: The idempotency check in killFailedBranchWithTimeout
+//     ensures that if multiple goroutines try to kill the same branch, only one increments metrics.
+//
+//  3. **Concurrent Cascade Operations**: Each goroutine works on its own child, and the
+//     parent's children list was snapshotted, so concurrent cascades don't interfere.
+//
+//  4. **Error Race Conditions**: The firstErr variable is protected by a dedicated mutex
+//     so concurrent error updates don't corrupt the first error value.
 //
 // # Error Handling
 //
 // Captures and returns the first error encountered, but continues processing all remaining
 // children. This ensures maximum cleanup even when some operations fail.
+// All children are awaited before returning, providing complete cascade coverage.
 //
 // See KILLSWITCH.md for architecture details and cascade examples.
 func (c *Coordinator) killDependentBranchesRecursive(ctx context.Context, branchID string) error {
@@ -216,43 +296,80 @@ func (c *Coordinator) killDependentBranchesRecursive(ctx context.Context, branch
 	branch, exists := c.activeBranches[branchID]
 	if !exists {
 		c.mu.Unlock()
-		return fmt.Errorf("branch %s not found", branchID)
+		return &KillSwitchError{
+			Operation:   "cascade_kill",
+			BranchID:    branchID,
+			Err:         fmt.Errorf("branch not found"),
+			Recoverable: false,
+			Context:     "branch does not exist in active branches",
+		}
 	}
 
+	// Create a snapshot of children IDs to process
+	// This prevents TOCTOU (Time-of-Check-Time-of-Use) issues where
+	// the children list could be modified by concurrent operations
 	childrenIDs := make([]string, len(branch.ChildrenIDs))
 	copy(childrenIDs, branch.ChildrenIDs)
 	c.mu.Unlock()
 
-	// Track errors but continue processing
-	var firstErr error
-
-	// Recursively kill all children
-	for _, childID := range childrenIDs {
-		// Check timeout before processing each child
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("kill cascade timed out while processing children of branch %s", branchID)
-		default:
-		}
-
-		// First kill the child's descendants
-		if err := c.killDependentBranchesRecursive(ctx, childID); err != nil {
-			// Log error but continue killing other branches
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-
-		// Then kill the child itself with timeout
-		if err := c.killFailedBranchWithTimeout(ctx, childID, fmt.Sprintf("parent branch %s failed", branchID)); err != nil {
-			// Log error but continue
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
+	// If no children, return early
+	if len(childrenIDs) == 0 {
+		return nil
 	}
+
+	// Track errors but continue processing all children
+	var firstErr error
+	var errMu sync.Mutex // Protects firstErr for concurrent access
+
+	// Use WaitGroup to spawn concurrent goroutines for each child
+	// This enables parallel processing of sibling branches
+	var wg sync.WaitGroup
+
+	// Spawn a goroutine for each child to enable concurrent processing
+	for _, childID := range childrenIDs {
+		wg.Add(1)
+		go func(cID string) {
+			defer wg.Done()
+
+			// Check timeout before processing this child
+			select {
+			case <-ctx.Done():
+				errMu.Lock()
+				if firstErr == nil {
+					firstErr = fmt.Errorf("kill cascade timed out while processing children of branch %s", branchID)
+				}
+				errMu.Unlock()
+				return
+			default:
+			}
+
+			// First kill the child's descendants recursively
+			if err := c.killDependentBranchesRecursive(ctx, cID); err != nil {
+				// Log error but continue killing other branches
+				errMu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				errMu.Unlock()
+				// Continue to kill the child itself even if descendants had issues
+			}
+
+			// Then kill the child itself with timeout
+			if err := c.killFailedBranchWithTimeout(ctx, cID, fmt.Sprintf("parent branch %s failed", branchID)); err != nil {
+				// Log error but continue
+				errMu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				errMu.Unlock()
+				// Don't return early - allow other siblings to be processed
+			}
+		}(childID)
+	}
+
+	// Wait for all children to complete
+	// This ensures we don't return until the entire subtree is processed
+	wg.Wait()
 
 	return firstErr
 }
