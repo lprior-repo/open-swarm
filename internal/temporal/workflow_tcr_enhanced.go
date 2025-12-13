@@ -7,26 +7,9 @@ package temporal
 
 import (
 	"fmt"
-	"time"
 
 	"go.temporal.io/sdk/log"
-	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
-)
-
-// Enhanced TCR activity timeouts
-const (
-	// EnhancedTCRStartToCloseTimeout is the maximum time for executing enhanced TCR activities
-	EnhancedTCRStartToCloseTimeout = 10 * time.Minute
-
-	// EnhancedTCRHeartbeatTimeout is the heartbeat timeout for enhanced TCR activities
-	EnhancedTCRHeartbeatTimeout = 30 * time.Second
-
-	// EnhancedTCRRetryCleanupTimeout is the timeout for cleanup/retry operations
-	EnhancedTCRRetryCleanupTimeout = 2 * time.Minute
-
-	// EnhancedTCRRetryMaxAttempts is the maximum number of retry attempts for TCR operations
-	EnhancedTCRRetryMaxAttempts = 3
 )
 
 // gateExecutor executes a gate activity and handles common error/duration tracking
@@ -93,15 +76,8 @@ func EnhancedTCRWorkflow(ctx workflow.Context, input EnhancedTCRInput) (*Enhance
 		Error:        "",
 	}
 
-	// Activity options
-	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: EnhancedTCRStartToCloseTimeout,
-		HeartbeatTimeout:    EnhancedTCRHeartbeatTimeout,
-		RetryPolicy: &temporal.RetryPolicy{
-			MaximumAttempts: 1, // Don't retry non-idempotent operations
-		},
-	}
-	ctx = workflow.WithActivityOptions(ctx, ao)
+	// Activity options - use shared non-idempotent options
+	ctx = WithNonIdempotentOptions(ctx)
 
 	cellActivities := NewCellActivities()
 	enhancedActivities := NewEnhancedActivities()
@@ -122,15 +98,9 @@ func EnhancedTCRWorkflow(ctx workflow.Context, input EnhancedTCRInput) (*Enhance
 	// SAGA PATTERN: Ensure cleanup happens (teardown + lock release)
 	var locksAcquired []string
 	defer func() {
-		// Use disconnected context for cleanup
+		// Use disconnected context for cleanup with saga pattern
 		disconnCtx, _ := workflow.NewDisconnectedContext(ctx)
-		cleanupAo := workflow.ActivityOptions{
-			StartToCloseTimeout: EnhancedTCRRetryCleanupTimeout,
-			RetryPolicy: &temporal.RetryPolicy{
-				MaximumAttempts: EnhancedTCRRetryMaxAttempts,
-			},
-		}
-		disconnCtx = workflow.WithActivityOptions(disconnCtx, cleanupAo)
+		disconnCtx = WithCleanupOptions(disconnCtx)
 
 		// Release all acquired locks
 		if len(locksAcquired) > 0 {

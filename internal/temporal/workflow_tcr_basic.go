@@ -7,9 +7,7 @@ package temporal
 
 import (
 	"fmt"
-	"time"
 
-	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -36,15 +34,8 @@ func TCRWorkflow(ctx workflow.Context, input TCRWorkflowInput) (*TCRWorkflowResu
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting TCR Workflow", "taskID", input.TaskID)
 
-	// Activity options
-	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Minute,
-		HeartbeatTimeout:    30 * time.Second,
-		RetryPolicy: &temporal.RetryPolicy{
-			MaximumAttempts: 1, // Don't retry non-idempotent operations
-		},
-	}
-	ctx = workflow.WithActivityOptions(ctx, ao)
+	// Activity options - use shared non-idempotent options
+	ctx = WithNonIdempotentOptions(ctx)
 
 	cellActivities := NewCellActivities()
 
@@ -66,13 +57,7 @@ func TCRWorkflow(ctx workflow.Context, input TCRWorkflowInput) (*TCRWorkflowResu
 	defer func() {
 		// Use disconnected context for cleanup
 		disconnCtx, _ := workflow.NewDisconnectedContext(ctx)
-		teardownAo := workflow.ActivityOptions{
-			StartToCloseTimeout: 2 * time.Minute,
-			RetryPolicy: &temporal.RetryPolicy{
-				MaximumAttempts: 3,
-			},
-		}
-		disconnCtx = workflow.WithActivityOptions(disconnCtx, teardownAo)
+		disconnCtx = WithCleanupOptions(disconnCtx)
 
 		logger.Info("Tearing down cell", "cellID", bootstrap.CellID)
 		_ = workflow.ExecuteActivity(disconnCtx, cellActivities.TeardownCell, bootstrap).Get(disconnCtx, nil)
