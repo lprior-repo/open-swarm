@@ -6,6 +6,7 @@ DOCKER := docker-compose
 BINARY_WORKER := temporal-worker
 BINARY_CLIENT := reactor-client
 BINARY_MAIN := open-swarm
+BINARY_STRESS_TEST := stress-test
 
 # Detect OS for cross-platform support
 UNAME_S := $(shell uname -s)
@@ -57,6 +58,7 @@ help:
 	@echo "Runtime:"
 	@echo "  run-worker        - Start the Temporal worker (requires docker-up)"
 	@echo "  run-client        - Start the reactor client (usage: make run-client TASK=<id> PROMPT='<prompt>')"
+	@echo "  run-stress-test   - Run stress test with 100 agents (usage: make run-stress-test STRESS_OPTS='-agents 100')"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean             - Remove built binaries and temporary files"
@@ -87,6 +89,8 @@ build:
 	@echo "  ✓ Built ./bin/single-agent-demo"
 	@$(GO) build -o bin/workflow-demo ./cmd/workflow-demo
 	@echo "  ✓ Built ./bin/workflow-demo"
+	@$(GO) build -o bin/$(BINARY_STRESS_TEST) ./cmd/stress-test
+	@echo "  ✓ Built ./bin/$(BINARY_STRESS_TEST)"
 	@echo ""
 	@echo "✓ All binaries built successfully"
 
@@ -116,6 +120,16 @@ run-client: build
 	@echo "Prompt: $(PROMPT)"
 	@echo ""
 	./bin/$(BINARY_CLIENT) -task $(TASK) -prompt "$(PROMPT)"
+
+# Run stress test
+run-stress-test: build
+	@echo "Running stress test..."
+	@echo "Make sure Docker services and worker are running:"
+	@echo "  1. Terminal 1: make docker-up"
+	@echo "  2. Terminal 2: make run-worker"
+	@echo "  3. Terminal 3: make run-stress-test"
+	@echo ""
+	./bin/$(BINARY_STRESS_TEST) $(STRESS_OPTS)
 
 # Start Docker services (Temporal + PostgreSQL + UI)
 docker-up:

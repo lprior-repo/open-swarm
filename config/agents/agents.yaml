@@ -1,0 +1,275 @@
+# Open Swarm Agent Roles Configuration
+# Master configuration file defining all available agent roles and their interactions
+
+agents:
+  # Implementation Agents
+  implementation:
+    file: implementation.yaml
+    description: Production code implementation specialist
+    primary_responsibility: writing production Go code
+    interaction_sequence:
+      - after_implementation: notify reviewer-architecture
+      - after_implementation: notify reviewer-functional
+      - after_implementation: notify reviewer-security
+      - before_completion: ensure test-generator has created tests
+
+  test-generator:
+    file: test-generator.yaml
+    description: Comprehensive test writing specialist
+    primary_responsibility: writing tests that validate implementation
+    interaction_sequence:
+      - after_tests_written: notify reviewer-testing
+      - depends_on: implementation
+      - before_completion: ensure coverage target met
+
+  # Review Agents
+  reviewer-architecture:
+    file: reviewer-architecture.yaml
+    description: Architecture and design pattern reviewer
+    primary_responsibility: evaluating architectural soundness
+    interaction_sequence:
+      - after_review: provide feedback to implementation
+      - shares_context_with:
+        - reviewer-functional
+        - reviewer-security
+
+  reviewer-functional:
+    file: reviewer-functional.yaml
+    description: Business logic and requirement compliance reviewer
+    primary_responsibility: validating functional correctness
+    interaction_sequence:
+      - after_review: provide feedback to implementation
+      - shares_context_with:
+        - reviewer-architecture
+        - reviewer-testing
+
+  reviewer-testing:
+    file: reviewer-testing.yaml
+    description: Test quality and coverage reviewer
+    primary_responsibility: ensuring comprehensive testing
+    interaction_sequence:
+      - after_review: provide feedback to test-generator
+      - shares_context_with:
+        - reviewer-functional
+
+  reviewer-security:
+    file: reviewer-security.yaml
+    description: Security vulnerability and best practice reviewer
+    primary_responsibility: identifying security risks
+    interaction_sequence:
+      - after_review: provide critical feedback to implementation
+      - shares_context_with:
+        - reviewer-architecture
+        - reviewer-functional
+
+  reviewer-performance:
+    file: reviewer-performance.yaml
+    description: Performance and efficiency reviewer
+    primary_responsibility: optimizing code performance
+    interaction_sequence:
+      - after_review: suggest optimizations to implementation
+      - shares_context_with:
+        - reviewer-architecture
+
+# Workflow Orchestration
+workflows:
+  implementation_workflow:
+    name: Full Implementation and Review
+    description: Complete workflow for implementing a feature with comprehensive review
+    steps:
+      - step: 1
+        agent: implementation
+        task: Write implementation code
+        required: true
+        output: production code
+
+      - step: 2
+        agent: test-generator
+        task: Write comprehensive tests
+        required: true
+        depends_on: [1]
+        output: test code with 80%+ coverage
+
+      - step: 3
+        agent: reviewer-architecture
+        task: Architecture review
+        required: true
+        depends_on: [1, 2]
+        output: architectural feedback
+
+      - step: 4
+        agent: reviewer-functional
+        task: Functional review
+        required: true
+        depends_on: [1, 2]
+        output: functional correctness feedback
+
+      - step: 5
+        agent: reviewer-testing
+        task: Test quality review
+        required: true
+        depends_on: [2]
+        output: testing feedback
+
+      - step: 6
+        agent: reviewer-security
+        task: Security review
+        required: true
+        depends_on: [1, 2]
+        output: security assessment
+
+      - step: 7
+        agent: reviewer-performance
+        task: Performance review
+        required: false
+        depends_on: [1, 2]
+        output: performance recommendations
+
+  fast_implementation_workflow:
+    name: Fast Implementation (Critical Issues)
+    description: Expedited workflow for urgent fixes
+    steps:
+      - step: 1
+        agent: implementation
+        task: Write implementation code
+        required: true
+        output: production code
+
+      - step: 2
+        agent: test-generator
+        task: Write critical tests
+        required: true
+        depends_on: [1]
+        output: minimal test code
+
+      - step: 3
+        agent: reviewer-security
+        task: Security review (critical only)
+        required: true
+        depends_on: [1, 2]
+        output: security assessment
+
+      - step: 4
+        agent: reviewer-functional
+        task: Functional review
+        required: true
+        depends_on: [1, 2]
+        output: functional correctness feedback
+
+  review_only_workflow:
+    name: Review Existing Code
+    description: Review workflow for existing code without changes
+    steps:
+      - step: 1
+        agent: reviewer-architecture
+        task: Architecture review
+        required: true
+        output: architectural feedback
+
+      - step: 2
+        agent: reviewer-functional
+        task: Functional review
+        required: true
+        output: functional correctness feedback
+
+      - step: 3
+        agent: reviewer-testing
+        task: Test quality review
+        required: true
+        output: testing feedback
+
+      - step: 4
+        agent: reviewer-security
+        task: Security review
+        required: true
+        output: security assessment
+
+      - step: 5
+        agent: reviewer-performance
+        task: Performance review
+        required: false
+        output: performance recommendations
+
+# Agent Collaboration Rules
+collaboration_rules:
+  communication:
+    protocol: agent-mail
+    threads_by_review_type: true
+    include_context: true
+
+  feedback_handling:
+    critical_blocks_merge: true
+    security_blocks_merge: true
+    functional_blocks_merge: true
+    architecture_blocks_merge: true
+    performance_is_advisory: true
+
+  conflict_resolution:
+    arbitrator: lead_reviewer
+    escalation_path: human_review
+    consensus_required_for:
+      - architecture_changes
+      - security_decisions
+      - performance_critical_changes
+
+# Tool Availability Matrix
+tool_matrix:
+  implementation:
+    - write
+    - edit
+    - read
+    - bash
+    - glob
+    - grep
+    - serena_all
+
+  test-generator:
+    - write
+    - edit
+    - read
+    - bash
+    - glob
+    - serena_all
+
+  reviewers:
+    - read
+    - bash
+    - glob
+    - grep
+    - serena_symbols
+    - serena_references
+    - serena_overview
+
+# Quality Gates
+quality_gates:
+  implementation:
+    - test_coverage: ">= 0.80"
+    - lint_errors: "0"
+    - architecture_approved: true
+
+  testing:
+    - coverage: ">= 0.80"
+    - edge_cases_covered: true
+    - deterministic: true
+
+  code_review:
+    - security_approved: true
+    - functional_approved: true
+    - architecture_approved: true
+    - performance_reviewed: true
+
+# Configuration Metadata
+metadata:
+  version: "1.0.0"
+  last_updated: "2025-12-13"
+  created_for: "Open Swarm"
+  description: "Agent configuration system for coordinated code review and implementation"
+
+  tags:
+    - implementation
+    - testing
+    - code-review
+    - architecture
+    - security
+    - performance
+    - functional

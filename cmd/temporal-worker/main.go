@@ -60,11 +60,13 @@ func main() {
 	w.RegisterWorkflow(temporal.TCRWorkflow)
 	w.RegisterWorkflow(temporal.EnhancedTCRWorkflow)
 	w.RegisterWorkflow(temporal.TddDagWorkflow)
+	w.RegisterWorkflow(temporal.StressTestWorkflow)
 
 	// Register activities
 	cellActivities := temporal.NewCellActivities()
 	enhancedActivities := temporal.NewEnhancedActivities()
 	shellActivities := &temporal.ShellActivities{}
+	agentActivities := temporal.NewAgentActivities()
 
 	w.RegisterActivity(cellActivities.BootstrapCell)
 	w.RegisterActivity(cellActivities.ExecuteTask)
@@ -82,6 +84,8 @@ func main() {
 	w.RegisterActivity(enhancedActivities.ExecuteMultiReview)
 	w.RegisterActivity(shellActivities.RunScript)
 	w.RegisterActivity(shellActivities.RunScriptInDir)
+	w.RegisterActivity(agentActivities.InvokeAgent)
+	w.RegisterActivity(agentActivities.StreamedInvokeAgent)
 
 	log.Println("📋 Registered workflows and activities")
 	log.Println("⚙️  Worker listening on task queue: reactor-task-queue")
