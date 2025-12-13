@@ -19,6 +19,13 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+const (
+	defaultNumAgents      = 60
+	backoffCoefficient    = 2.0
+	maxRetryAttempts      = 3
+	defaultTimeoutSeconds = 60
+)
+
 // AgentResult contains the result of an agent execution.
 type AgentResult struct {
 	AgentID  int

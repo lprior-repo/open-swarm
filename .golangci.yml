@@ -287,25 +287,40 @@ issues:
   exclude-use-default: true
   uniq-by-line: true
   exclude-rules:
+    # Test files: relaxed rules for test code
     - path: _test\.go
       linters:
+        - asasalint
         - cyclop
         - dupl
         - errcheck
         - errorlint
+        - forbidigo
         - gochecknoglobals
         - gocognit
         - goconst
         - gocritic
         - gocyclo
+        - godot
+        - loggercheck
         - mnd
         - gosec
+        - nonamedreturns
+        - varnamelen
         - wrapcheck
+    - path: _test\.go$
+      linters:
+        - tparallel
+
+    # Main functions: allow magic numbers and globals
     - path: cmd/.*/main\.go
       linters:
+        - forbidigo
         - gochecknoglobals
         - mnd
         - wrapcheck
+
+    # Temporal workflows: context parameter exceptions
     - path: internal/temporal/
       linters:
         - mnd
@@ -314,21 +329,15 @@ issues:
       linters:
         - wrapcheck
         - gosec
+    - text: "context.Context should be the first parameter"
+      path: internal/temporal/
+
+    # Infrastructure code
     - path: internal/infra/
       linters:
         - mnd
-    - text: "G104:"
-      linters:
-        - gosec
-    - text: "context.Context should be the first parameter"
-      path: internal/temporal/
-    - text: "`.*` is unused"
-      linters:
-        - unparam
-      path: _test\.go
-    - text: "should have a package comment"
-      linters:
-        - revive
+
+    # Generated code: exclude all linters
     - path: ".*\\.pb\\.go$"
       linters:
         - all
@@ -341,6 +350,21 @@ issues:
     - path: "mock_.*\\.go$"
       linters:
         - all
+
+    # Specific checks to ignore
+    - text: "G104:"
+      linters:
+        - gosec
+    - text: "`.*` is unused"
+      linters:
+        - unparam
+      path: _test\.go
+
+    # Documentation exceptions
+    - text: "should have a package comment"
+      linters:
+        - revive
+
   new: false
   fix: false
 

@@ -47,9 +47,9 @@ func main() {
 
 	// 1. Setup Infrastructure
 	log.Println("\n📦 Step 1: Setting up infrastructure...")
-	portMgr := infra.NewPortManager(8000, 8100)
+	portMgr := infra.NewPortManager(portRangeStart, portRangeEnd)
 	serverMgr := infra.NewServerManager()
-	log.Printf("   ✅ Port range: 8000-8100 (%d ports available)", portMgr.AvailableCount())
+	log.Printf("   ✅ Port range: %d-%d (%d ports available)", portRangeStart, portRangeEnd, portMgr.AvailableCount())
 	log.Printf("   ✅ Server manager ready (health timeout: 10s)")
 
 	// 2. Allocate Port

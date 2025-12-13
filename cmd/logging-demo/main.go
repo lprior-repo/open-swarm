@@ -44,9 +44,11 @@ func main() {
 	}
 	slog.SetDefault(slog.New(handler))
 
-	fmt.Println("=== Open Swarm Logging Demo ===\n")
+	fmt.Println("=== Open Swarm Logging Demo ===")
+	fmt.Println()
 	fmt.Println("This demonstrates the comprehensive logging system that tracks")
-	fmt.Println("agent interactions and conflict resolution in real-time.\n")
+	fmt.Println("agent interactions and conflict resolution in real-time.")
+	fmt.Println()
 
 	// Demo 1: Agent Coordination
 	fmt.Println("\n--- Demo 1: Agent Coordination ---")

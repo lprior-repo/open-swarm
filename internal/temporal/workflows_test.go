@@ -66,26 +66,11 @@ func TestDAGToposort(t *testing.T) {
 			verifyOrder: func(t *testing.T, sorted []interface{}) {
 				// setup should come before test1 and test2
 				// test1 and test2 should come before finalize
-				setupIdx := -1
-				test1Idx := -1
-				test2Idx := -1
-				finalizeIdx := -1
-				for i, node := range sorted {
-					switch node {
-					case "setup":
-						setupIdx = i
-					case "test1":
-						test1Idx = i
-					case "test2":
-						test2Idx = i
-					case "finalize":
-						finalizeIdx = i
-					}
-				}
-				assert.Greater(t, test1Idx, setupIdx)
-				assert.Greater(t, test2Idx, setupIdx)
-				assert.Greater(t, finalizeIdx, test1Idx)
-				assert.Greater(t, finalizeIdx, test2Idx)
+				indices := findNodeIndices(sorted, []string{"setup", "test1", "test2", "finalize"})
+				assert.Greater(t, indices["test1"], indices["setup"])
+				assert.Greater(t, indices["test2"], indices["setup"])
+				assert.Greater(t, indices["finalize"], indices["test1"])
+				assert.Greater(t, indices["finalize"], indices["test2"])
 			},
 		},
 		{
@@ -101,26 +86,11 @@ func TestDAGToposort(t *testing.T) {
 			verifyOrder: func(t *testing.T, sorted []interface{}) {
 				// a should come before b and c
 				// b and c should come before d
-				aIdx := -1
-				bIdx := -1
-				cIdx := -1
-				dIdx := -1
-				for i, node := range sorted {
-					switch node {
-					case "a":
-						aIdx = i
-					case "b":
-						bIdx = i
-					case "c":
-						cIdx = i
-					case "d":
-						dIdx = i
-					}
-				}
-				assert.Greater(t, bIdx, aIdx)
-				assert.Greater(t, cIdx, aIdx)
-				assert.Greater(t, dIdx, bIdx)
-				assert.Greater(t, dIdx, cIdx)
+				indices := findNodeIndices(sorted, []string{"a", "b", "c", "d"})
+				assert.Greater(t, indices["b"], indices["a"])
+				assert.Greater(t, indices["c"], indices["a"])
+				assert.Greater(t, indices["d"], indices["b"])
+				assert.Greater(t, indices["d"], indices["c"])
 			},
 		},
 		{

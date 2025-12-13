@@ -137,7 +137,7 @@ func (c *Coordinator) Submit(ctx context.Context, change *ChangeRequest) error {
 
 // processQueue is the main coordinator loop
 func (c *Coordinator) processQueue(ctx context.Context) {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(processQueueTickInterval)
 	defer ticker.Stop()
 
 	for {
