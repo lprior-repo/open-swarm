@@ -8,14 +8,16 @@ package temporal
 import (
 	"sync"
 
+	"open-swarm/internal/filelock"
 	"open-swarm/internal/infra"
 )
 
 var (
-	globalPortManager     *infra.PortManager
-	globalServerManager   *infra.ServerManager
-	globalWorktreeManager *infra.WorktreeManager
-	initOnce              sync.Once
+	globalPortManager      *infra.PortManager
+	globalServerManager    *infra.ServerManager
+	globalWorktreeManager  *infra.WorktreeManager
+	globalFileLockRegistry *filelock.MemoryRegistry
+	initOnce               sync.Once
 )
 
 // InitializeGlobals sets up shared infrastructure managers
@@ -35,6 +37,7 @@ func InitializeGlobals(portMin, portMax int, repoDir, worktreeBase string) {
 		globalPortManager = infra.NewPortManager(portMin, portMax)
 		globalServerManager = infra.NewServerManager()
 		globalWorktreeManager = infra.NewWorktreeManager(repoDir, worktreeBase)
+		globalFileLockRegistry = filelock.NewMemoryRegistry()
 	})
 }
 
@@ -42,4 +45,10 @@ func InitializeGlobals(portMin, portMax int, repoDir, worktreeBase string) {
 // Must be called after InitializeGlobals
 func GetManagers() (*infra.PortManager, *infra.ServerManager, *infra.WorktreeManager) {
 	return globalPortManager, globalServerManager, globalWorktreeManager
+}
+
+// GetFileLockRegistry returns the global file lock registry
+// Must be called after InitializeGlobals
+func GetFileLockRegistry() *filelock.MemoryRegistry {
+	return globalFileLockRegistry
 }
