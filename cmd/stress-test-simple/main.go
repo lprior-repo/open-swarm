@@ -44,8 +44,8 @@ func SimpleAgentWorkflow(ctx workflow.Context, agentID int, command string) (str
 		StartToCloseTimeout: 1 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    1 * time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumAttempts:    3,
+			BackoffCoefficient: backoffCoefficient,
+			MaximumAttempts:    maxRetryAttempts,
 		},
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
@@ -63,7 +63,7 @@ func SimpleAgentWorkflow(ctx workflow.Context, agentID int, command string) (str
 }
 
 func main() {
-	numAgents := flag.Int("agents", 60, "Number of parallel agents")
+	numAgents := flag.Int("agents", defaultNumAgents, "Number of parallel agents")
 	flag.Parse()
 
 	log.Printf("🚀 Starting stress test with %d parallel agents", *numAgents)
@@ -196,7 +196,7 @@ func printResults(results []AgentResult, totalDuration time.Duration) {
 
 	if successCount == len(results) {
 		fmt.Println("🎉 ALL AGENTS COMPLETED SUCCESSFULLY!")
-		fmt.Println("✨ System handled 60 parallel agents without issues!")
+		fmt.Printf("✨ System handled %d parallel agents without issues!\n", defaultNumAgents)
 	} else {
 		fmt.Printf("⚠️  %d agents failed - check logs above\n", failCount)
 	}

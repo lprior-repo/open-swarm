@@ -225,9 +225,9 @@ func (c *Coordinator) processMainQueue(ctx context.Context) {
 // calculateDepth adapts speculation depth based on historical success rate
 func (c *Coordinator) calculateDepth() int {
 	if c.stats.SuccessRate >= c.config.HighPassRateThreshold {
-		return c.config.DefaultDepth + 2 // Increase depth
+		return c.config.DefaultDepth + depthOffset // Increase depth
 	} else if c.stats.SuccessRate <= c.config.LowPassRateThreshold {
-		return maxInt(2, c.config.DefaultDepth-2) // Decrease depth
+		return maxInt(minAdaptiveDepth, c.config.DefaultDepth-depthOffset) // Decrease depth
 	}
 	return c.config.DefaultDepth
 }
