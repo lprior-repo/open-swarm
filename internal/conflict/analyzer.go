@@ -9,8 +9,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"time"
+
+	"open-swarm/internal/patternmatch"
 )
 
 // Reservation represents a file reservation from Agent Mail
@@ -281,14 +282,5 @@ func (a *Analyzer) determineConflictType(requestExclusive bool, holders []Holder
 // patternsOverlap checks if two file patterns overlap using glob matching
 // This implements symmetric fnmatchcase: either pattern can match the other
 func patternsOverlap(pattern1, pattern2 string) bool {
-	// Exact match
-	if pattern1 == pattern2 {
-		return true
-	}
-
-	// Try matching in both directions (symmetric)
-	match1, _ := filepath.Match(pattern1, pattern2)
-	match2, _ := filepath.Match(pattern2, pattern1)
-
-	return match1 || match2
+	return patternmatch.Overlap(pattern1, pattern2)
 }
