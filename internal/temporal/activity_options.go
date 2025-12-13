@@ -61,3 +61,11 @@ func WithNonIdempotentOptions(ctx workflow.Context) workflow.Context {
 func WithCleanupOptions(ctx workflow.Context) workflow.Context {
 	return workflow.WithActivityOptions(ctx, GetCleanupActivityOptions())
 }
+
+// NewSagaContext creates a disconnected context with cleanup options for saga pattern cleanup.
+// Use this in defer blocks to ensure cleanup activities run even if the workflow is cancelled.
+// Returns the saga context and a cancel function (which can be ignored for cleanup scenarios).
+func NewSagaContext(ctx workflow.Context) (workflow.Context, workflow.CancelFunc) {
+	disconnCtx, cancel := workflow.NewDisconnectedContext(ctx)
+	return WithCleanupOptions(disconnCtx), cancel
+}

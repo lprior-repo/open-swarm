@@ -98,20 +98,18 @@ func EnhancedTCRWorkflow(ctx workflow.Context, input EnhancedTCRInput) (*Enhance
 	// SAGA PATTERN: Ensure cleanup happens (teardown + lock release)
 	var locksAcquired []string
 	defer func() {
-		// Use disconnected context for cleanup with saga pattern
-		disconnCtx, _ := workflow.NewDisconnectedContext(ctx)
-		disconnCtx = WithCleanupOptions(disconnCtx)
+		sagaCtx, _ := NewSagaContext(ctx)
 
 		// Release all acquired locks
 		if len(locksAcquired) > 0 {
 			logger.Info("Saga: Releasing file locks", "count", len(locksAcquired))
-			_ = workflow.ExecuteActivity(disconnCtx, enhancedActivities.ReleaseFileLocks,
-				input.CellID, locksAcquired).Get(disconnCtx, nil)
+			_ = workflow.ExecuteActivity(sagaCtx, enhancedActivities.ReleaseFileLocks,
+				input.CellID, locksAcquired).Get(sagaCtx, nil)
 		}
 
 		// Teardown cell
 		logger.Info("Saga: Tearing down cell", "cellID", bootstrap.CellID)
-		_ = workflow.ExecuteActivity(disconnCtx, cellActivities.TeardownCell, bootstrap).Get(disconnCtx, nil)
+		_ = workflow.ExecuteActivity(sagaCtx, cellActivities.TeardownCell, bootstrap).Get(sagaCtx, nil)
 	}()
 
 	// STEP 2: Acquire File Locks

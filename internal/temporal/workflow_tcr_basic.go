@@ -55,12 +55,9 @@ func TCRWorkflow(ctx workflow.Context, input TCRWorkflowInput) (*TCRWorkflowResu
 
 	// Ensure teardown happens (saga pattern)
 	defer func() {
-		// Use disconnected context for cleanup
-		disconnCtx, _ := workflow.NewDisconnectedContext(ctx)
-		disconnCtx = WithCleanupOptions(disconnCtx)
-
+		sagaCtx, _ := NewSagaContext(ctx)
 		logger.Info("Tearing down cell", "cellID", bootstrap.CellID)
-		_ = workflow.ExecuteActivity(disconnCtx, cellActivities.TeardownCell, bootstrap).Get(disconnCtx, nil)
+		_ = workflow.ExecuteActivity(sagaCtx, cellActivities.TeardownCell, bootstrap).Get(sagaCtx, nil)
 	}()
 
 	// Step 2: Execute Task
