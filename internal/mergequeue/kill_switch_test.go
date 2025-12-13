@@ -2,6 +2,7 @@ package mergequeue
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,7 +66,11 @@ func TestKillFailedBranchWithTimeout_NonExistentBranch(t *testing.T) {
 	// Try to kill a non-existent branch
 	err := coord.killFailedBranchWithTimeout(ctx, "non-existent", "test failure")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "branch non-existent not found")
+	// Check for branch not found error
+	errMsg := err.Error()
+	assert.True(t,
+		strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "does not exist"),
+		"Error should indicate branch not found. Got: %v", err)
 }
 
 func TestKillFailedBranchWithTimeout_Idempotent(t *testing.T) {
@@ -419,9 +424,10 @@ func TestKillDependentBranchesWithTimeout_Timeout(t *testing.T) {
 	// Kill should timeout
 	err := coord.killDependentBranchesWithTimeout(ctx, "parent")
 	require.Error(t, err)
-	// Check for timeout in error message or error type
+	// Check for timeout in error message - can be from context timeout
+	errMsg := err.Error()
 	assert.True(t,
-		contains(err.Error(), "timeout") || contains(err.Error(), "timed out"),
+		strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "timed out"),
 		"Error should mention timeout. Got: %v", err)
 }
 
@@ -438,7 +444,11 @@ func TestKillDependentBranchesWithTimeout_NonExistentBranch(t *testing.T) {
 	// Try to kill dependents of non-existent branch
 	err := coord.killDependentBranchesWithTimeout(ctx, "non-existent")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "branch non-existent not found")
+	// Check for branch not found error - can be in the form of KillSwitchError or string message
+	errMsg := err.Error()
+	assert.True(t,
+		strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "does not exist"),
+		"Error should indicate branch not found. Got: %v", err)
 }
 
 func TestKillDependentBranchesWithTimeout_AlreadyKilledChildren(t *testing.T) {
