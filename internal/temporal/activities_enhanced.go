@@ -29,6 +29,30 @@ func NewEnhancedActivities() *EnhancedActivities {
 	}
 }
 
+// newFailedGateResult creates a GateResult for failed gate execution.
+// Consolidates the common error result pattern across all gate functions.
+func newFailedGateResult(gateName string, err error, startTime time.Time) *GateResult {
+	return &GateResult{
+		GateName: gateName,
+		Passed:   false,
+		Error:    err.Error(),
+		Duration: time.Since(startTime),
+	}
+}
+
+// getChangedFiles extracts file paths from agent file status.
+// Returns a slice of non-empty file paths that were modified.
+func getChangedFiles(ctx context.Context, cell *agent.Cell) []string {
+	fileStatus, _ := cell.Client.GetFileStatus(ctx)
+	filesChanged := make([]string, 0, len(fileStatus))
+	for _, file := range fileStatus {
+		if file.Path != "" {
+			filesChanged = append(filesChanged, file.Path)
+		}
+	}
+	return filesChanged
+}
+
 // AcquireFileLocks acquires locks on task-related files
 // Returns list of locked file patterns
 func (ea *EnhancedActivities) AcquireFileLocks(ctx context.Context, cellID string, taskID string) ([]string, error) {
@@ -115,22 +139,10 @@ Requirements:
 	})
 
 	if err != nil {
-		return &GateResult{
-			GateName: "gen_test",
-			Passed:   false,
-			Error:    err.Error(),
-			Duration: time.Since(startTime),
-		}, err
+		return newFailedGateResult("gen_test", err, startTime), err
 	}
 
-	// Get modified files
-	fileStatus, _ := cell.Client.GetFileStatus(ctx)
-	filesChanged := []string{}
-	for _, file := range fileStatus {
-		if file.Path != "" {
-			filesChanged = append(filesChanged, file.Path)
-		}
-	}
+	filesChanged := getChangedFiles(ctx, cell)
 
 	return &GateResult{
 		GateName: "gen_test",
@@ -297,22 +309,10 @@ Requirements:
 	})
 
 	if err != nil {
-		return &GateResult{
-			GateName: "gen_impl",
-			Passed:   false,
-			Error:    err.Error(),
-			Duration: time.Since(startTime),
-		}, err
+		return newFailedGateResult("gen_impl", err, startTime), err
 	}
 
-	// Get modified files
-	fileStatus, _ := cell.Client.GetFileStatus(ctx)
-	filesChanged := []string{}
-	for _, file := range fileStatus {
-		if file.Path != "" {
-			filesChanged = append(filesChanged, file.Path)
-		}
-	}
+	filesChanged := getChangedFiles(ctx, cell)
 
 	return &GateResult{
 		GateName: "gen_impl",
