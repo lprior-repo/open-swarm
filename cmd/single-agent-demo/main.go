@@ -3,6 +3,7 @@
 // This software is released under the MIT License.
 // See LICENSE file in the repository for details.
 
+// Package main demonstrates a single agent orchestration example.
 package main
 
 import (
@@ -14,6 +15,12 @@ import (
 
 	"open-swarm/internal/agent"
 	"open-swarm/internal/infra"
+)
+
+const (
+	defaultTimeoutMinutes = 5
+	portRangeStart        = 8000
+	portRangeEnd          = 8100
 )
 
 func main() {
@@ -28,15 +35,15 @@ func main() {
 	log.Println("  6. Verify results")
 	log.Println()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
 	// Get current working directory
 	cwd, err := os.Getwd()
 	if err != nil {
 		log.Fatalf("❌ Failed to get working directory: %v", err)
 	}
 	log.Printf("Working directory: %s\n", cwd)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeoutMinutes*time.Minute)
+	defer cancel()
 
 	// 1. Setup Infrastructure
 	log.Println("\n📦 Step 1: Setting up infrastructure...")
@@ -80,7 +87,7 @@ func main() {
 	log.Printf("   ⏱️  Boot time: %v", bootDuration)
 
 	// Verify server is healthy
-	if !serverMgr.IsHealthy(serverHandle) {
+	if !serverMgr.IsHealthy(ctx, serverHandle) {
 		log.Fatal("❌ Server health check failed after boot")
 	}
 	log.Println("   ✅ Health check passed")
@@ -159,7 +166,7 @@ func main() {
 
 	// Final health check
 	log.Println("\n🏥 Final health check...")
-	if serverMgr.IsHealthy(serverHandle) {
+	if serverMgr.IsHealthy(ctx, serverHandle) {
 		log.Println("   ✅ Server still healthy")
 	} else {
 		log.Println("   ⚠️  Server health check failed")

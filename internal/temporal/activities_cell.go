@@ -108,7 +108,7 @@ func (ca *CellActivities) ExecuteTask(ctx context.Context, bootstrap *BootstrapO
 		return &TaskOutput{
 			Success:      false,
 			ErrorMessage: err.Error(),
-		}, nil
+		}, err
 	}
 
 	return &TaskOutput{

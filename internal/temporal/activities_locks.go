@@ -58,7 +58,7 @@ func (ca *CellActivities) ExecuteTaskWithLocks(ctx context.Context, input Execut
 	activity.RecordHeartbeat(ctx, "locks acquired, executing task")
 
 	// Step 3: Execute task with periodic lock renewal
-	output, err := ca.executeTaskWithHeartbeat(ctx, input)
+	output := ca.executeTaskWithHeartbeat(ctx, input)
 
 	// Step 4: Release locks in defer (ensures cleanup even on error)
 	defer func() {
@@ -68,11 +68,11 @@ func (ca *CellActivities) ExecuteTaskWithLocks(ctx context.Context, input Execut
 		}
 	}()
 
-	return output, err
+	return output, nil
 }
 
 // executeTaskWithHeartbeat runs the task and renews locks periodically
-func (ca *CellActivities) executeTaskWithHeartbeat(ctx context.Context, input ExecuteTaskWithLocksInput) (*TaskOutput, error) {
+func (ca *CellActivities) executeTaskWithHeartbeat(ctx context.Context, input ExecuteTaskWithLocksInput) *TaskOutput {
 	// Reconstruct cell from bootstrap output
 	cell := ca.reconstructCell(input.Bootstrap)
 
@@ -88,7 +88,7 @@ func (ca *CellActivities) executeTaskWithHeartbeat(ctx context.Context, input Ex
 		return &TaskOutput{
 			Success:      false,
 			ErrorMessage: err.Error(),
-		}, nil
+		}
 	}
 
 	// Record heartbeat after task completes (renews lock leases)
@@ -99,7 +99,7 @@ func (ca *CellActivities) executeTaskWithHeartbeat(ctx context.Context, input Ex
 		Output:        result.Output,
 		FilesModified: result.FilesModified,
 		ErrorMessage:  result.ErrorMessage,
-	}, nil
+	}
 }
 
 // AcquireFileLocks acquires exclusive locks for the specified file paths
@@ -125,7 +125,7 @@ func (ca *CellActivities) AcquireFileLocks(ctx context.Context, paths []string, 
 	}
 
 	// Acquire locks for each path
-	var acquiredPaths []string
+	acquiredPaths := make([]string, 0, len(paths))
 	for _, path := range paths {
 		req := filelock.LockRequest{
 			Path:      path,

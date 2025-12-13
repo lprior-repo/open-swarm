@@ -9,11 +9,19 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"go.temporal.io/sdk/client"
 
 	"open-swarm/internal/temporal"
+)
+
+const (
+	// Workflow timeout duration
+	workflowTimeoutDuration = 5 * time.Minute
+	// Delay before sending signal to complete workflow (demo purposes)
+	signalDelayDuration = 15 * time.Second
 )
 
 func main() {
@@ -24,7 +32,12 @@ func main() {
 	if err != nil {
 		log.Fatalln("❌ Unable to connect to Temporal:", err)
 	}
-	defer c.Close()
+
+	defer func() {
+		if c != nil {
+			c.Close()
+		}
+	}()
 
 	log.Println("✅ Connected to Temporal server")
 	log.Println("🌐 Open Temporal UI: http://localhost:8233")
@@ -55,7 +68,8 @@ func main() {
 
 	we, err := c.ExecuteWorkflow(context.Background(), workflowOptions, temporal.TddDagWorkflow, input)
 	if err != nil {
-		log.Fatalf("❌ Failed to start workflow: %v", err)
+		log.Printf("❌ Failed to start workflow: %v", err)
+		os.Exit(1)
 	}
 
 	log.Printf("✅ Workflow started!")
@@ -71,13 +85,13 @@ func main() {
 	log.Printf("")
 
 	// Wait for completion (with timeout)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), workflowTimeoutDuration)
 	defer cancel()
 
 	// The workflow will wait for signal since it's TDD mode
 	// For demo purposes, let's send the signal after a delay
 	go func() {
-		time.Sleep(15 * time.Second)
+		time.Sleep(signalDelayDuration)
 		log.Println("")
 		log.Println("📢 Sending 'FixApplied' signal to complete workflow...")
 		err := c.SignalWorkflow(ctx, workflowID, "", "FixApplied", "Demo completed successfully")

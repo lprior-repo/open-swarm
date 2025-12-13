@@ -224,7 +224,7 @@ lint:
 		echo "Run 'make install-tools' first."; \
 		exit 1; \
 	fi
-	@$(GOLANGCI_LINT) run --timeout=5m
+	@$(GOLANGCI_LINT) run --timeout=5m || (echo "Linting found issues - see output above"; exit 1)
 	@echo "✓ Linting completed"
 
 # Run linter with auto-fix
@@ -235,7 +235,7 @@ lint-fix:
 		echo "Run 'make install-tools' first."; \
 		exit 1; \
 	fi
-	@$(GOLANGCI_LINT) run --fix --timeout=5m
+	@$(GOLANGCI_LINT) run --fix --timeout=5m || (echo "Linting found issues - see output above"; exit 1)
 	@echo "✓ Linting with auto-fix completed"
 
 # Run tests with race detector

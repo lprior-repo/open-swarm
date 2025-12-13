@@ -19,6 +19,7 @@ import (
 	"open-swarm/internal/temporal"
 )
 
+// AgentResult contains the result of an agent execution.
 type AgentResult struct {
 	AgentID  int
 	Success  bool
@@ -27,9 +28,19 @@ type AgentResult struct {
 	Output   string
 }
 
+const (
+	defaultNumAgents        = 60
+	defaultTaskType         = "shell"
+	defaultSleepDuration    = 0.1
+	oneHour                 = 1 * time.Hour
+	reportLineWidth         = 60
+	reportMinusLineWidth    = 60
+	percentMultiplier       = 100.0
+)
+
 func main() {
-	numAgents := flag.Int("agents", 60, "Number of parallel agents")
-	taskType := flag.String("task", "shell", "Task type: shell, tcr")
+	numAgents := flag.Int("agents", defaultNumAgents, "Number of parallel agents")
+	taskType := flag.String("task", defaultTaskType, "Task type: shell, tcr")
 	flag.Parse()
 
 	log.Printf("🚀 Starting stress test with %d parallel agents", *numAgents)
@@ -91,7 +102,7 @@ func runAgent(c client.Client, agentID int, taskType string) AgentResult {
 			Tasks: []temporal.Task{
 				{
 					Name:    fmt.Sprintf("agent-%d-task", agentID),
-					Command: fmt.Sprintf("echo 'Agent %d processing...' && sleep 0.1 && echo 'Complete'", agentID),
+					Command: fmt.Sprintf("echo 'Agent %d processing...' && sleep %g && echo 'Complete'", agentID, defaultSleepDuration),
 					Deps:    []string{},
 				},
 			},
@@ -153,7 +164,7 @@ func printResults(results []AgentResult, totalDuration time.Duration) {
 	successCount := 0
 	failCount := 0
 	var totalAgentTime time.Duration
-	var minDuration time.Duration = time.Hour
+	var minDuration time.Duration = oneHour
 	var maxDuration time.Duration
 
 	for i, r := range results {
@@ -175,19 +186,19 @@ func printResults(results []AgentResult, totalDuration time.Duration) {
 
 	avgDuration := totalAgentTime / time.Duration(len(results))
 
-	fmt.Println("\n" + strings.Repeat("═", 60))
+	fmt.Println("\n" + strings.Repeat("═", reportLineWidth))
 	fmt.Println("📊 STRESS TEST RESULTS")
-	fmt.Println(strings.Repeat("═", 60))
+	fmt.Println(strings.Repeat("═", reportLineWidth))
 	fmt.Printf("Total agents:        %d\n", len(results))
-	fmt.Printf("✅ Successful:       %d (%.1f%%)\n", successCount, float64(successCount)/float64(len(results))*100)
-	fmt.Printf("❌ Failed:           %d (%.1f%%)\n", failCount, float64(failCount)/float64(len(results))*100)
-	fmt.Println(strings.Repeat("─", 60))
+	fmt.Printf("✅ Successful:       %d (%.1f%%)\n", successCount, float64(successCount)/float64(len(results))*percentMultiplier)
+	fmt.Printf("❌ Failed:           %d (%.1f%%)\n", failCount, float64(failCount)/float64(len(results))*percentMultiplier)
+	fmt.Println(strings.Repeat("─", reportMinusLineWidth))
 	fmt.Printf("⏱️  Total wall time:  %v\n", totalDuration)
 	fmt.Printf("📈 Avg agent time:   %v\n", avgDuration)
 	fmt.Printf("⚡ Min agent time:   %v\n", minDuration)
 	fmt.Printf("🐌 Max agent time:   %v\n", maxDuration)
 	fmt.Printf("🔥 Throughput:       %.2f agents/sec\n", float64(len(results))/totalDuration.Seconds())
-	fmt.Println(strings.Repeat("═", 60) + "\n")
+	fmt.Println(strings.Repeat("═", reportLineWidth) + "\n")
 
 	if successCount == len(results) {
 		fmt.Println("🎉 ALL AGENTS COMPLETED SUCCESSFULLY!")

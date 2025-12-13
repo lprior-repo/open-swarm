@@ -5,6 +5,9 @@
 
 package temporal
 
+// Default maximum number of retries allowed per gate
+const DefaultMaxRetries = 2
+
 // RetryBudget tracks retry attempts for different gate types in Enhanced TCR workflow
 // Supports max 2 retries for test-gen and impl gates as per workflow specification
 type RetryBudget struct {
@@ -22,8 +25,10 @@ type RetryBudget struct {
 type GateType string
 
 const (
-	GateTestGen GateType = "test_gen" // Test generation gate
-	GateImpl    GateType = "impl"     // Implementation gate
+	// GateTestGen represents the test generation gate
+	GateTestGen GateType = "test_gen"
+	// GateImpl represents the implementation gate
+	GateImpl GateType = "impl"
 )
 
 // NewRetryBudget creates a new RetryBudget with default max retries (2)
@@ -31,7 +36,7 @@ func NewRetryBudget() *RetryBudget {
 	return &RetryBudget{
 		TestGenRetries: 0,
 		ImplRetries:    0,
-		MaxRetries:     2,
+		MaxRetries:     DefaultMaxRetries,
 	}
 }
 

@@ -36,7 +36,7 @@ type ServerManagerInterface interface {
 	Shutdown(handle *ServerHandle) error
 
 	// IsHealthy checks if the server is still responsive
-	IsHealthy(handle *ServerHandle) bool
+	IsHealthy(ctx context.Context, handle *ServerHandle) bool
 }
 
 // WorktreeManagerInterface defines the interface for Git worktree management

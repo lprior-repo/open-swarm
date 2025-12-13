@@ -46,7 +46,7 @@ func TestClient_GetPort(t *testing.T) {
 	assert.Equal(t, 8080, client.GetPort())
 }
 
-func TestClient_ImplementsInterface(t *testing.T) {
+func TestClient_ImplementsInterface(_ *testing.T) {
 	client := NewClient("http://localhost:8080", 8080)
 	var _ ClientInterface = client
 }

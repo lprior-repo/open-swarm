@@ -21,6 +21,7 @@ import (
 	"open-swarm/internal/temporal"
 )
 
+// Bead represents a task/issue to be processed by an agent.
 type Bead struct {
 	ID          string   `json:"id"`
 	Title       string   `json:"title"`
@@ -31,6 +32,7 @@ type Bead struct {
 	Labels      []string `json:"labels"`
 }
 
+// BeadResult contains the result of processing a single bead.
 type BeadResult struct {
 	BeadID    string
 	Success   bool
@@ -157,6 +159,7 @@ func processOneBead(c client.Client, bead Bead) BeadResult {
 	log.Printf("🤖 Agent starting on: [%s] %s", bead.ID, bead.Title)
 
 	// Mark bead as in_progress
+	// #nosec G204 - bead.ID is from trusted bd CLI output
 	updateCmd := exec.Command("bd", "update", bead.ID, "--status=in_progress")
 	if err := updateCmd.Run(); err != nil {
 		log.Printf("⚠️  Failed to mark %s as in_progress: %v", bead.ID, err)
@@ -197,8 +200,11 @@ func processOneBead(c client.Client, bead Bead) BeadResult {
 
 	if err != nil {
 		// Mark as failed
+		// #nosec G204 - bead.ID is from trusted bd CLI output
 		closeCmd := exec.Command("bd", "update", bead.ID, "--status=open")
-		closeCmd.Run()
+		if err := closeCmd.Run(); err != nil {
+			log.Printf("⚠️  Failed to update bead status: %v", err)
+		}
 
 		log.Printf("❌ Agent failed on: [%s] %s - %v", bead.ID, bead.Title, err)
 		return BeadResult{
@@ -211,6 +217,7 @@ func processOneBead(c client.Client, bead Bead) BeadResult {
 
 	if result.Success {
 		// Close the bead
+		// #nosec G204 - bead.ID is from trusted bd CLI output
 		closeCmd := exec.Command("bd", "close", bead.ID, "--reason=Completed by automated agent swarm")
 		if err := closeCmd.Run(); err != nil {
 			log.Printf("⚠️  Failed to close %s: %v", bead.ID, err)
@@ -227,7 +234,9 @@ func processOneBead(c client.Client, bead Bead) BeadResult {
 
 	// Tests failed - revert
 	closeCmd := exec.Command("bd", "update", bead.ID, "--status=open")
-	closeCmd.Run()
+	if err := closeCmd.Run(); err != nil {
+		log.Printf("⚠️  Failed to update bead status: %v", err)
+	}
 
 	log.Printf("⚠️  Agent tests failed: [%s] %s", bead.ID, bead.Title)
 	return BeadResult{

@@ -122,7 +122,7 @@ Requirements:
 			Passed:   false,
 			Error:    err.Error(),
 			Duration: time.Since(startTime),
-		}, nil
+		}, err
 	}
 
 	// Get modified files
@@ -304,7 +304,7 @@ Requirements:
 			Passed:   false,
 			Error:    err.Error(),
 			Duration: time.Since(startTime),
-		}, nil
+		}, err
 	}
 
 	// Get modified files
@@ -382,9 +382,8 @@ func (ea *EnhancedActivities) ExecuteVerifyGREEN(ctx context.Context, bootstrap 
 					return fmt.Sprintf("tests failed (not GREEN): %d failure(s) detected", len(parseResult.Failures))
 				}
 				return "tests failed (not GREEN)"
-			} else {
-				return ""
 			}
+			return ""
 		}(),
 	}, nil
 }

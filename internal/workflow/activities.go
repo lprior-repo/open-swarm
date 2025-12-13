@@ -3,6 +3,7 @@
 // This software is released under the MIT License.
 // See LICENSE file in the repository for details.
 
+// Package workflow provides workflow activity implementations for cell management
 package workflow
 
 import (
@@ -106,7 +107,7 @@ func (a *Activities) BootstrapCell(ctx context.Context, cellID string, branch st
 
 // TeardownCell destroys a cell and releases all resources
 // INV-005: Server Process must be killed when Workflow Activity completes
-func (a *Activities) TeardownCell(ctx context.Context, cell *CellBootstrap) error {
+func (a *Activities) TeardownCell(_ context.Context, cell *CellBootstrap) error {
 	var errs []error
 
 	// 1. Shutdown Server (INV-005)
@@ -141,7 +142,7 @@ func (a *Activities) TeardownCell(ctx context.Context, cell *CellBootstrap) erro
 // INV-006: Command execution must use SDK
 func (a *Activities) ExecuteTask(ctx context.Context, cell *CellBootstrap, task *agent.TaskContext) (*agent.ExecutionResult, error) {
 	// 1. Verify server is healthy
-	if !a.serverManager.IsHealthy(cell.ServerHandle) {
+	if !a.serverManager.IsHealthy(ctx, cell.ServerHandle) {
 		return nil, fmt.Errorf("server is not healthy")
 	}
 
@@ -154,7 +155,7 @@ func (a *Activities) ExecuteTask(ctx context.Context, cell *CellBootstrap, task 
 		return &agent.ExecutionResult{
 			Success:      false,
 			ErrorMessage: err.Error(),
-		}, nil
+		}, err
 	}
 
 	// 3. Get file modifications

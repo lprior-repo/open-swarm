@@ -14,6 +14,21 @@ import (
 	"time"
 )
 
+const (
+	// Default health check timeout duration
+	defaultHealthTimeout = 10 * time.Second
+	// Health check interval duration
+	healthCheckInterval = 200 * time.Millisecond
+	// HTTP status code for OK
+	httpStatusOK = 200
+	// Graceful shutdown timeout
+	gracefulShutdownTimeout = 5 * time.Second
+	// HTTP client timeout for health checks
+	healthCheckClientTimeout = 1 * time.Second
+	// HTTP client timeout for general requests
+	generalClientTimeout = 2 * time.Second
+)
+
 // ServerHandle represents a running opencode server instance
 // Enforces INV-002: Working directory must be set to Git Worktree
 // Enforces INV-003: Must wait for healthcheck before SDK connection
@@ -37,8 +52,8 @@ type ServerManager struct {
 func NewServerManager() *ServerManager {
 	return &ServerManager{
 		opencodeCommand: "opencode",
-		healthTimeout:   10 * time.Second,
-		healthInterval:  200 * time.Millisecond,
+		healthTimeout:   defaultHealthTimeout,
+		healthInterval:  healthCheckInterval,
 	}
 }
 
@@ -46,6 +61,11 @@ func NewServerManager() *ServerManager {
 // INV-002: Agent Server working directory must be set to the Git Worktree
 // INV-003: Supervisor must wait for Server Healthcheck (200 OK) before connecting SDK
 func (sm *ServerManager) BootServer(ctx context.Context, worktreePath string, worktreeID string, port int) (*ServerHandle, error) {
+	// Validate port is within safe range to prevent command injection
+	if port < 1 || port > 65535 {
+		return nil, fmt.Errorf("invalid port number: %d", port)
+	}
+
 	// 1. Prepare Command: opencode serve --port X --hostname localhost
 	cmd := exec.CommandContext(ctx, sm.opencodeCommand, "serve",
 		"--port", fmt.Sprintf("%d", port),
@@ -75,7 +95,7 @@ func (sm *ServerManager) BootServer(ctx context.Context, worktreePath string, wo
 	defer cancel()
 
 	ready := false
-	client := &http.Client{Timeout: 1 * time.Second}
+	client := &http.Client{Timeout: healthCheckClientTimeout}
 	ticker := time.NewTicker(sm.healthInterval)
 	defer ticker.Stop()
 
@@ -88,11 +108,14 @@ func (sm *ServerManager) BootServer(ctx context.Context, worktreePath string, wo
 
 		case <-ticker.C:
 			// Check health endpoint
-			resp, err := client.Get(baseURL + "/health")
+			req, err := http.NewRequestWithContext(healthCtx, "GET", baseURL+"/health", nil)
 			if err == nil {
-				resp.Body.Close()
-				if resp.StatusCode == 200 {
-					ready = true
+				resp, err := client.Do(req)
+				if err == nil {
+					resp.Body.Close()
+					if resp.StatusCode == httpStatusOK {
+						ready = true
+					}
 				}
 			}
 
@@ -153,7 +176,7 @@ func (sm *ServerManager) killProcess(cmd *exec.Cmd) error {
 	}()
 
 	select {
-	case <-time.After(5 * time.Second):
+	case <-time.After(gracefulShutdownTimeout):
 		// Force kill if graceful shutdown takes too long
 		_ = syscall.Kill(-pgid, syscall.SIGKILL)
 		return fmt.Errorf("server shutdown timed out, force killed")
@@ -166,19 +189,23 @@ func (sm *ServerManager) killProcess(cmd *exec.Cmd) error {
 }
 
 // IsHealthy checks if the server is still responsive
-func (sm *ServerManager) IsHealthy(handle *ServerHandle) bool {
+func (sm *ServerManager) IsHealthy(ctx context.Context, handle *ServerHandle) bool {
 	if handle == nil {
 		return false
 	}
 
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(handle.BaseURL + "/health")
+	client := &http.Client{Timeout: generalClientTimeout}
+	req, err := http.NewRequestWithContext(ctx, "GET", handle.BaseURL+"/health", nil)
+	if err != nil {
+		return false
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return false
 	}
 	defer resp.Body.Close()
 
-	return resp.StatusCode == 200
+	return resp.StatusCode == httpStatusOK
 }
 
 // SetOpencodeCommand allows overriding the opencode command (useful for testing)

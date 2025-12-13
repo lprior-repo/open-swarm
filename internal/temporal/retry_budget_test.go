@@ -281,9 +281,25 @@ func TestTotalRetries(t *testing.T) {
 }
 
 func TestRetryWorkflow_Scenario(t *testing.T) {
-	// Simulate a realistic workflow scenario
 	rb := NewRetryBudget()
 
+	// Test TestGen gate exhaustion
+	testGenExhaustionScenario(t, rb)
+
+	// Test Impl gate availability
+	testImplGateAvailability(t, rb)
+
+	// Test total retry count
+	if rb.TotalRetries() != 3 {
+		t.Errorf("Expected total retries = 3, got %d", rb.TotalRetries())
+	}
+
+	// Test reset functionality
+	testResetFunctionality(t, rb)
+}
+
+// testGenExhaustionScenario tests exhausting TestGen retries
+func testGenExhaustionScenario(t *testing.T, rb *RetryBudget) {
 	// First attempt at test gen - fails
 	if !rb.CanRetry(GateTestGen) {
 		t.Fatal("Should be able to attempt TestGen")
@@ -305,7 +321,10 @@ func TestRetryWorkflow_Scenario(t *testing.T) {
 	if rb.CanRetry(GateTestGen) {
 		t.Error("Should not be able to retry after exhausting budget")
 	}
+}
 
+// testImplGateAvailability tests that Impl gate remains available
+func testImplGateAvailability(t *testing.T, rb *RetryBudget) {
 	// Impl gate should still be available
 	if !rb.CanRetry(GateImpl) {
 		t.Error("Impl gate should still be available")
@@ -316,12 +335,10 @@ func TestRetryWorkflow_Scenario(t *testing.T) {
 	if rb.GetRetryCount(GateImpl) != 1 {
 		t.Errorf("Expected Impl retry count = 1, got %d", rb.GetRetryCount(GateImpl))
 	}
+}
 
-	// Total retries should be 3
-	if rb.TotalRetries() != 3 {
-		t.Errorf("Expected total retries = 3, got %d", rb.TotalRetries())
-	}
-
+// testResetFunctionality tests reset behavior
+func testResetFunctionality(t *testing.T, rb *RetryBudget) {
 	// Reset and start fresh
 	rb.ResetRetryCounters()
 	if rb.TotalRetries() != 0 {

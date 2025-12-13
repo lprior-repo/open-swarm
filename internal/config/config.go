@@ -128,6 +128,7 @@ func Load() (*Config, error) {
 	}
 
 	// Read file
+	// #nosec G304 - configPath is constructed from hardcoded .claude/opencode.yaml
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)

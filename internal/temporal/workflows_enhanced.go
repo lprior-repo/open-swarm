@@ -14,6 +14,21 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+// Enhanced TCR activity timeouts
+const (
+	// EnhancedTCRStartToCloseTimeout is the maximum time for executing enhanced TCR activities
+	EnhancedTCRStartToCloseTimeout = 10 * time.Minute
+
+	// EnhancedTCRHeartbeatTimeout is the heartbeat timeout for enhanced TCR activities
+	EnhancedTCRHeartbeatTimeout = 30 * time.Second
+
+	// EnhancedTCRRetryCleanupTimeout is the timeout for cleanup/retry operations
+	EnhancedTCRRetryCleanupTimeout = 2 * time.Minute
+
+	// EnhancedTCRRetryMaxAttempts is the maximum number of retry attempts for TCR operations
+	EnhancedTCRRetryMaxAttempts = 3
+)
+
 // gateExecutor executes a gate activity and handles common error/duration tracking
 type gateExecutor struct {
 	ctx            workflow.Context
@@ -24,7 +39,7 @@ type gateExecutor struct {
 }
 
 // executeGate runs a gate activity and handles result tracking
-func (ge *gateExecutor) executeGate(gateName string, activityFn interface{}, args ...interface{}) (*GateResult, error) {
+func (ge *gateExecutor) executeGate(gateName string, activityFn interface{}, args ...interface{}) error {
 	ge.logger.Info(fmt.Sprintf("Gate: %s", gateName))
 	gateStart := workflow.Now(ge.ctx)
 
@@ -48,7 +63,7 @@ func (ge *gateExecutor) executeGate(gateName string, activityFn interface{}, arg
 		ge.result.Error = fmt.Sprintf("%s failed: %v", gateName, gateResult.Error)
 		// Revert changes on gate failure
 		_ = workflow.ExecuteActivity(ge.ctx, ge.cellActivities.RevertChanges, ge.bootstrap).Get(ge.ctx, nil)
-		return gateResult, fmt.Errorf("gate failed")
+		return fmt.Errorf("gate failed")
 	}
 
 	// Track files changed if available
@@ -58,7 +73,7 @@ func (ge *gateExecutor) executeGate(gateName string, activityFn interface{}, arg
 		}
 	}
 
-	return gateResult, nil
+	return nil
 }
 
 // EnhancedTCRWorkflow implements the 6-Gate Enhanced TCR pattern with file locks
@@ -80,8 +95,8 @@ func EnhancedTCRWorkflow(ctx workflow.Context, input EnhancedTCRInput) (*Enhance
 
 	// Activity options
 	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Minute,
-		HeartbeatTimeout:    30 * time.Second,
+		StartToCloseTimeout: EnhancedTCRStartToCloseTimeout,
+		HeartbeatTimeout:    EnhancedTCRHeartbeatTimeout,
 		RetryPolicy: &temporal.RetryPolicy{
 			MaximumAttempts: 1, // Don't retry non-idempotent operations
 		},
@@ -110,9 +125,9 @@ func EnhancedTCRWorkflow(ctx workflow.Context, input EnhancedTCRInput) (*Enhance
 		// Use disconnected context for cleanup
 		disconnCtx, _ := workflow.NewDisconnectedContext(ctx)
 		cleanupAo := workflow.ActivityOptions{
-			StartToCloseTimeout: 2 * time.Minute,
+			StartToCloseTimeout: EnhancedTCRRetryCleanupTimeout,
 			RetryPolicy: &temporal.RetryPolicy{
-				MaximumAttempts: 3,
+				MaximumAttempts: EnhancedTCRRetryMaxAttempts,
 			},
 		}
 		disconnCtx = workflow.WithActivityOptions(disconnCtx, cleanupAo)
@@ -152,33 +167,33 @@ func EnhancedTCRWorkflow(ctx workflow.Context, input EnhancedTCRInput) (*Enhance
 	}
 
 	// GATE 1: GenTest - Generate Tests
-	_, err = executor.executeGate("GenTest", enhancedActivities.ExecuteGenTest,
+	err = executor.executeGate("GenTest", enhancedActivities.ExecuteGenTest,
 		bootstrap, input.TaskID, input.AcceptanceCriteria)
 	if err != nil {
 		return result, nil
 	}
 
 	// GATE 2: LintTest - Lint Test Files
-	_, err = executor.executeGate("LintTest", enhancedActivities.ExecuteLintTest, bootstrap)
+	err = executor.executeGate("LintTest", enhancedActivities.ExecuteLintTest, bootstrap)
 	if err != nil {
 		return result, nil
 	}
 
 	// GATE 3: VerifyRED - Tests Must Fail
-	_, err = executor.executeGate("VerifyRED", enhancedActivities.ExecuteVerifyRED, bootstrap)
+	err = executor.executeGate("VerifyRED", enhancedActivities.ExecuteVerifyRED, bootstrap)
 	if err != nil {
 		return result, nil
 	}
 
 	// GATE 4: GenImpl - Generate Implementation
-	_, err = executor.executeGate("GenImpl", enhancedActivities.ExecuteGenImpl,
+	err = executor.executeGate("GenImpl", enhancedActivities.ExecuteGenImpl,
 		bootstrap, input.TaskID, input.Description, input.AcceptanceCriteria, "")
 	if err != nil {
 		return result, nil
 	}
 
 	// GATE 5: VerifyGREEN - Tests Must Pass
-	_, err = executor.executeGate("VerifyGREEN", enhancedActivities.ExecuteVerifyGREEN, bootstrap)
+	err = executor.executeGate("VerifyGREEN", enhancedActivities.ExecuteVerifyGREEN, bootstrap)
 	if err != nil {
 		return result, nil
 	}
@@ -189,7 +204,7 @@ func EnhancedTCRWorkflow(ctx workflow.Context, input EnhancedTCRInput) (*Enhance
 		reviewersCount = 3 // Default: 3 reviewers
 	}
 
-	_, err = executor.executeGate("MultiReview", enhancedActivities.ExecuteMultiReview,
+	err = executor.executeGate("MultiReview", enhancedActivities.ExecuteMultiReview,
 		bootstrap, input.TaskID, input.Description, reviewersCount)
 	if err != nil {
 		return result, nil

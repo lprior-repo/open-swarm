@@ -17,6 +17,17 @@ import (
 	"open-swarm/pkg/coordinator"
 )
 
+const (
+	blueLakeReservationID    = 101
+	redMountainReservationID = 102
+	greenForestReservationID = 103
+	oldAgentReservationID    = 104
+	thirtyMinutes            = 30 * time.Minute
+	fifteenMinutes           = 15 * time.Minute
+	threeMinutes             = 3 * time.Minute
+	tenMinutes               = 10 * time.Minute
+)
+
 func main() {
 	// Configure structured logging with JSON output for production
 	// or text output for development
@@ -45,15 +56,27 @@ func main() {
 		},
 	}
 
-	coord, _ := coordinator.New(cfg)
+	coord, err := coordinator.New(cfg)
+	if err != nil {
+		fmt.Printf("Failed to create coordinator: %v\n", err)
+		return
+	}
 
 	// Register multiple agents
-	coord.RegisterAgent("BlueLake", "opencode", "sonnet-4.5", "Implementing user authentication")
-	coord.RegisterAgent("RedMountain", "opencode", "opus-4.5", "Writing tests for auth module")
-	coord.RegisterAgent("GreenForest", "opencode", "haiku-4.5", "Refactoring database layer")
+	if err := coord.RegisterAgent("BlueLake", "opencode", "sonnet-4.5", "Implementing user authentication"); err != nil {
+		fmt.Printf("Failed to register BlueLake agent: %v\n", err)
+	}
+	if err := coord.RegisterAgent("RedMountain", "opencode", "opus-4.5", "Writing tests for auth module"); err != nil {
+		fmt.Printf("Failed to register RedMountain agent: %v\n", err)
+	}
+	if err := coord.RegisterAgent("GreenForest", "opencode", "haiku-4.5", "Refactoring database layer"); err != nil {
+		fmt.Printf("Failed to register GreenForest agent: %v\n", err)
+	}
 
 	// Sync coordination state
-	coord.Sync()
+	if err := coord.Sync(); err != nil {
+		fmt.Printf("Failed to sync coordination state: %v\n", err)
+	}
 
 	// Demo 2: Conflict Detection
 	fmt.Println("\n\n--- Demo 2: Conflict Detection ---")
@@ -62,18 +85,18 @@ func main() {
 	// Simulate existing reservations
 	existingReservations := []conflict.Reservation{
 		{
-			ID:        101,
+			ID:        blueLakeReservationID,
 			AgentName: "BlueLake",
 			Pattern:   "internal/auth/*.go",
 			Exclusive: true,
-			ExpiresAt: time.Now().Add(30 * time.Minute),
+			ExpiresAt: time.Now().Add(thirtyMinutes),
 		},
 		{
-			ID:        102,
+			ID:        redMountainReservationID,
 			AgentName: "RedMountain",
 			Pattern:   "internal/auth/*_test.go",
 			Exclusive: false,
-			ExpiresAt: time.Now().Add(15 * time.Minute),
+			ExpiresAt: time.Now().Add(fifteenMinutes),
 		},
 	}
 
@@ -99,11 +122,11 @@ func main() {
 	fmt.Println("\nScenario 3: Reservation expiring soon")
 	expiringReservations := []conflict.Reservation{
 		{
-			ID:        103,
+			ID:        greenForestReservationID,
 			AgentName: "BlueLake",
 			Pattern:   "internal/config/*.go",
 			Exclusive: true,
-			ExpiresAt: time.Now().Add(3 * time.Minute), // Expires in 3 minutes
+			ExpiresAt: time.Now().Add(threeMinutes), // Expires in 3 minutes
 		},
 	}
 	c3, _ := analyzer.CheckConflict(ctx, "GreenForest", "internal/config/*.go", true, expiringReservations)
@@ -116,11 +139,11 @@ func main() {
 	fmt.Println("\nScenario 4: Stale (expired) reservation")
 	staleReservations := []conflict.Reservation{
 		{
-			ID:        104,
+			ID:        oldAgentReservationID,
 			AgentName: "OldAgent",
 			Pattern:   "internal/cache/*.go",
 			Exclusive: true,
-			ExpiresAt: time.Now().Add(-10 * time.Minute), // Expired 10 minutes ago
+			ExpiresAt: time.Now().Add(-tenMinutes), // Expired 10 minutes ago
 		},
 	}
 	c4, _ := analyzer.CheckConflict(ctx, "GreenForest", "internal/cache/*.go", true, staleReservations)

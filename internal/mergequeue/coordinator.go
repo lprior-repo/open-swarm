@@ -7,6 +7,21 @@ import (
 	"time"
 )
 
+const (
+	// Default kill switch timeout duration (milliseconds)
+	defaultKillSwitchTimeout = 500 * time.Millisecond
+	// Default speculation depth for merge queue
+	defaultDepth = 5
+	// Default depth offset for adaptive depth calculation
+	depthOffset = 2
+	// Minimum adaptive depth
+	minAdaptiveDepth = 2
+	// Process queue tick interval
+	processQueueTickInterval = 100 * time.Millisecond
+	// Default channel buffer capacity
+	defaultChannelCapacity = 100
+)
+
 // Coordinator implements Uber-style speculative merge queue
 type Coordinator struct {
 	mu sync.RWMutex
@@ -67,7 +82,7 @@ func NewCoordinator(config CoordinatorConfig) *Coordinator {
 		config.MaxBypassSlots = 3
 	}
 	if config.DefaultDepth == 0 {
-		config.DefaultDepth = 5
+		config.DefaultDepth = defaultDepth
 	}
 	if config.HighPassRateThreshold == 0 {
 		config.HighPassRateThreshold = 0.90
@@ -76,7 +91,7 @@ func NewCoordinator(config CoordinatorConfig) *Coordinator {
 		config.LowPassRateThreshold = 0.70
 	}
 	if config.KillSwitchTimeout == 0 {
-		config.KillSwitchTimeout = 500 * time.Millisecond
+		config.KillSwitchTimeout = defaultKillSwitchTimeout
 	}
 	if config.TestTimeout == 0 {
 		config.TestTimeout = 5 * time.Minute
@@ -87,8 +102,8 @@ func NewCoordinator(config CoordinatorConfig) *Coordinator {
 		bypassLane:     make([]*ChangeRequest, 0),
 		activeBranches: make(map[string]*SpeculativeBranch),
 		config:         config,
-		changesChan:    make(chan *ChangeRequest, 100),
-		resultsChan:    make(chan *TestResult, 100),
+		changesChan:    make(chan *ChangeRequest, defaultChannelCapacity),
+		resultsChan:    make(chan *TestResult, defaultChannelCapacity),
 		shutdownChan:   make(chan struct{}),
 	}
 }
@@ -200,7 +215,7 @@ func (c *Coordinator) processMainQueue(ctx context.Context) {
 	depth := c.calculateDepth()
 
 	// Take up to 'depth' changes from queue
-	batchSize := min(depth, len(c.mainQueue))
+	batchSize := minInt(depth, len(c.mainQueue))
 	batch := c.mainQueue[:batchSize]
 
 	// Create speculative branches
@@ -212,13 +227,13 @@ func (c *Coordinator) calculateDepth() int {
 	if c.stats.SuccessRate >= c.config.HighPassRateThreshold {
 		return c.config.DefaultDepth + 2 // Increase depth
 	} else if c.stats.SuccessRate <= c.config.LowPassRateThreshold {
-		return max(2, c.config.DefaultDepth-2) // Decrease depth
+		return maxInt(2, c.config.DefaultDepth-2) // Decrease depth
 	}
 	return c.config.DefaultDepth
 }
 
 // createSpeculativeBranches spawns parallel tests for batch
-func (c *Coordinator) createSpeculativeBranches(ctx context.Context, batch []*ChangeRequest) {
+func (c *Coordinator) createSpeculativeBranches(_ context.Context, batch []*ChangeRequest) {
 	// TODO: Implement speculative branch creation
 	// 1. Create base test (change[0])
 	// 2. Create speculative tests (change[0]+change[1], change[0]+change[1]+change[2], etc)
@@ -226,7 +241,7 @@ func (c *Coordinator) createSpeculativeBranches(ctx context.Context, batch []*Ch
 }
 
 // processBypass handles independent changes in bypass lane
-func (c *Coordinator) processBypass(ctx context.Context, change *ChangeRequest) {
+func (c *Coordinator) processBypass(_ context.Context, change *ChangeRequest) {
 	// TODO: Implement bypass lane processing
 	// 1. Test change in isolation
 	// 2. If pass -> merge directly to main
@@ -254,7 +269,7 @@ func (c *Coordinator) processTestResult(ctx context.Context, result *TestResult)
 	// Find which branch this result belongs to
 	var failedBranchID string
 	for id, branch := range c.activeBranches {
-		if branch.TestResult == result || (result.ChangeIDs != nil && len(result.ChangeIDs) > 0) {
+		if branch.TestResult == result || len(result.ChangeIDs) > 0 {
 			// Match by change IDs
 			match := true
 			if len(branch.Changes) == len(result.ChangeIDs) {
@@ -278,18 +293,18 @@ func (c *Coordinator) processTestResult(ctx context.Context, result *TestResult)
 	if result.Passed {
 		// TODO: Merge successful changes
 		// TODO: Promote queue (remove merged, advance next)
-	} else {
+	} else if failedBranchID != "" {
 		// Kill switch: Kill failed branch and all its dependent children
-		if failedBranchID != "" {
-			// First kill all dependent branches
-			if err := c.killDependentBranches(ctx, failedBranchID); err != nil {
-				// Log error but continue
-			}
+		// First kill all dependent branches
+		if err := c.killDependentBranches(ctx, failedBranchID); err != nil {
+			// Log error but continue
+			_ = err
+		}
 
-			// Then kill the failed branch itself
-			if err := c.killFailedBranch(ctx, failedBranchID, fmt.Sprintf("tests failed: %s", result.ErrorMessage)); err != nil {
-				// Log error
-			}
+		// Then kill the failed branch itself
+		if err := c.killFailedBranch(ctx, failedBranchID, fmt.Sprintf("tests failed: %s", result.ErrorMessage)); err != nil {
+			// Log error
+			_ = err
 		}
 		// TODO: Promote next change to base
 	}
@@ -299,7 +314,7 @@ func (c *Coordinator) processTestResult(ctx context.Context, result *TestResult)
 }
 
 // updateStats updates queue performance metrics
-func (c *Coordinator) updateStats(result *TestResult) {
+func (c *Coordinator) updateStats(_ *TestResult) {
 	// TODO: Implement metrics tracking
 }
 
@@ -311,7 +326,7 @@ func (c *Coordinator) GetStats() QueueStats {
 }
 
 // killFailedBranch kills a single speculative branch and cleans up its resources
-func (c *Coordinator) killFailedBranch(ctx context.Context, branchID string, reason string) error {
+func (c *Coordinator) killFailedBranch(_ context.Context, branchID string, reason string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -339,7 +354,7 @@ func (c *Coordinator) killFailedBranch(ctx context.Context, branchID string, rea
 }
 
 // killDependentBranches recursively kills all child branches when a parent fails
-func (c *Coordinator) killDependentBranches(ctx context.Context, branchID string) error {
+func (c *Coordinator) killDependentBranches(_ context.Context, branchID string) error {
 	c.mu.Lock()
 	branch, exists := c.activeBranches[branchID]
 	if !exists {
@@ -370,14 +385,14 @@ func (c *Coordinator) killDependentBranches(ctx context.Context, branchID string
 }
 
 // Helper functions
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}
 	return b
 }
 
-func max(a, b int) int {
+func maxInt(a, b int) int {
 	if a > b {
 		return a
 	}

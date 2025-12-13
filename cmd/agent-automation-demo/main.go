@@ -160,7 +160,9 @@ func runBuildPipeline(ctx context.Context, c client.Client) {
 	go func() {
 		time.Sleep(18 * time.Second)
 		log.Println("   📢 All tests passed! Sending completion signal...")
-		c.SignalWorkflow(ctx, workflowID, "", "FixApplied", "Build pipeline successful")
+		if err := c.SignalWorkflow(ctx, workflowID, "", "FixApplied", "Build pipeline successful"); err != nil {
+			log.Printf("⚠️  Failed to signal workflow: %v", err)
+		}
 	}()
 
 	// Wait with timeout
@@ -248,7 +250,9 @@ func runMultiAgentFeature(ctx context.Context, c client.Client) {
 	go func() {
 		time.Sleep(18 * time.Second)
 		log.Println("   📢 Feature complete! Sending signal...")
-		c.SignalWorkflow(ctx, workflowID, "", "FixApplied", "Feature development complete")
+		if err := c.SignalWorkflow(ctx, workflowID, "", "FixApplied", "Feature development complete"); err != nil {
+			log.Printf("⚠️  Failed to signal workflow: %v", err)
+		}
 	}()
 
 	ctxTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -324,7 +328,9 @@ func runTDDWorkflow(ctx context.Context, c client.Client) {
 	go func() {
 		time.Sleep(12 * time.Second)
 		log.Println("   📢 TDD cycle complete! Sending signal...")
-		c.SignalWorkflow(ctx, workflowID, "", "FixApplied", "TDD cycle successful")
+		if err := c.SignalWorkflow(ctx, workflowID, "", "FixApplied", "TDD cycle successful"); err != nil {
+			log.Printf("⚠️  Failed to signal workflow: %v", err)
+		}
 	}()
 
 	ctxTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)

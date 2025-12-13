@@ -472,7 +472,7 @@ func TestTCRWorkflow_DisconnectedContextForTeardown(t *testing.T) {
 
 	// Teardown should always be called
 	teardownCalled := false
-	env.OnActivity(cellActivities.TeardownCell, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+	env.OnActivity(cellActivities.TeardownCell, mock.Anything, mock.Anything).Return(nil).Run(func(_ mock.Arguments) {
 		teardownCalled = true
 	})
 

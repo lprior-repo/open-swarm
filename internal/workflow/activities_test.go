@@ -52,7 +52,7 @@ func (m *mockPortManager) IsAllocated(port int) bool {
 type mockServerManager struct {
 	bootFunc     func(ctx context.Context, path, id string, port int) (*infra.ServerHandle, error)
 	shutdownFunc func(handle *infra.ServerHandle) error
-	healthyFunc  func(handle *infra.ServerHandle) bool
+	healthyFunc  func(ctx context.Context, handle *infra.ServerHandle) bool
 }
 
 func (m *mockServerManager) BootServer(ctx context.Context, path, id string, port int) (*infra.ServerHandle, error) {
@@ -73,9 +73,9 @@ func (m *mockServerManager) Shutdown(handle *infra.ServerHandle) error {
 	return nil
 }
 
-func (m *mockServerManager) IsHealthy(handle *infra.ServerHandle) bool {
+func (m *mockServerManager) IsHealthy(ctx context.Context, handle *infra.ServerHandle) bool {
 	if m.healthyFunc != nil {
-		return m.healthyFunc(handle)
+		return m.healthyFunc(ctx, handle)
 	}
 	return true
 }
@@ -237,14 +237,14 @@ func TestBootstrapCell_PortAllocationFailure(t *testing.T) {
 func TestBootstrapCell_WorktreeCreationFailure(t *testing.T) {
 	portReleased := false
 	portMgr := &mockPortManager{
-		releaseFunc: func(port int) error {
+		releaseFunc: func(_ int) error {
 			portReleased = true
 			return nil
 		},
 	}
 	serverMgr := &mockServerManager{}
 	worktreeMgr := &mockWorktreeManager{
-		createFunc: func(id, branch string) (*infra.WorktreeInfo, error) {
+		createFunc: func(_ string, _ string) (*infra.WorktreeInfo, error) {
 			return nil, errors.New("git worktree creation failed")
 		},
 	}
@@ -411,7 +411,7 @@ func TestExecuteTask_Success(t *testing.T) {
 
 	portMgr := &mockPortManager{}
 	serverMgr := &mockServerManager{
-		healthyFunc: func(_ *infra.ServerHandle) bool {
+		healthyFunc: func(_ context.Context, _ *infra.ServerHandle) bool {
 			return true
 		},
 	}
@@ -445,7 +445,7 @@ func TestExecuteTask_Success(t *testing.T) {
 func TestExecuteTask_UnhealthyServer(t *testing.T) {
 	portMgr := &mockPortManager{}
 	serverMgr := &mockServerManager{
-		healthyFunc: func(_ *infra.ServerHandle) bool {
+		healthyFunc: func(_ context.Context, _ *infra.ServerHandle) bool {
 			return false
 		},
 	}

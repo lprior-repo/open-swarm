@@ -6,6 +6,7 @@
 package filelock
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -121,8 +122,8 @@ func TestAcquire_Conflict(t *testing.T) {
 	})
 	assert.Error(t, err)
 	assert.False(t, result.Granted)
-	conflictErr, ok := err.(*ConflictError)
-	assert.True(t, ok)
+	var conflictErr *ConflictError
+	assert.True(t, errors.As(err, &conflictErr))
 	assert.Equal(t, "/exclusive.txt", conflictErr.RequestedPath)
 
 	// Test shared blocking exclusive
@@ -144,8 +145,7 @@ func TestAcquire_Conflict(t *testing.T) {
 	})
 	assert.Error(t, err)
 	assert.False(t, result.Granted)
-	conflictErr, ok = err.(*ConflictError)
-	assert.True(t, ok)
+	assert.True(t, errors.As(err, &conflictErr))
 	assert.Len(t, conflictErr.ExistingLocks, 1)
 }
 
@@ -264,7 +264,7 @@ func TestConcurrent(t *testing.T) {
 	// Concurrent releases
 	registry2 := NewMemoryRegistry()
 	for i := 0; i < 5; i++ {
-		registry2.Acquire(LockRequest{
+		_, _ = registry2.Acquire(LockRequest{
 			Path:      "/file" + string(rune(i)),
 			Holder:    "agent" + string(rune(i)),
 			Exclusive: false,
@@ -375,7 +375,7 @@ func TestRenewLock(t *testing.T) {
 
 	// Try to renew expired lock
 	registry2 := NewMemoryRegistry()
-	registry2.Acquire(LockRequest{
+	_, _ = registry2.Acquire(LockRequest{
 		Path:      "/expired.txt",
 		Holder:    "agent1",
 		Exclusive: false,

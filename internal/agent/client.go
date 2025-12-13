@@ -129,6 +129,23 @@ func (c *Client) ExecutePrompt(ctx context.Context, prompt string, opts *PromptO
 		case opencode.PartTypeTool:
 			resultPart.ToolName = part.Tool
 			// Tool result would need additional handling if available
+		case opencode.PartTypeReasoning:
+			// Reasoning part - store as text for now
+			resultPart.Text = part.Text
+		case opencode.PartTypeFile:
+			// File part handling
+		case opencode.PartTypeStepStart:
+			// Step start marker
+		case opencode.PartTypeStepFinish:
+			// Step finish marker
+		case opencode.PartTypeSnapshot:
+			// Snapshot part
+		case opencode.PartTypePatch:
+			// Patch part
+		case opencode.PartTypeAgent:
+			// Agent part
+		case opencode.PartTypeRetry:
+			// Retry part
 		}
 
 		result.Parts = append(result.Parts, resultPart)
@@ -178,6 +195,23 @@ func (c *Client) ExecuteCommand(ctx context.Context, sessionID string, command s
 		case opencode.PartTypeTool:
 			resultPart.ToolName = part.Tool
 			// Tool result would need additional handling if available
+		case opencode.PartTypeReasoning:
+			// Reasoning part - store as text for now
+			resultPart.Text = part.Text
+		case opencode.PartTypeFile:
+			// File part handling
+		case opencode.PartTypeStepStart:
+			// Step start marker
+		case opencode.PartTypeStepFinish:
+			// Step finish marker
+		case opencode.PartTypeSnapshot:
+			// Snapshot part
+		case opencode.PartTypePatch:
+			// Patch part
+		case opencode.PartTypeAgent:
+			// Agent part
+		case opencode.PartTypeRetry:
+			// Retry part
 		}
 
 		result.Parts = append(result.Parts, resultPart)

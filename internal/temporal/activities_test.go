@@ -79,6 +79,7 @@ func TestBootstrapOutputSerialization(t *testing.T) {
 				ServerPID:    12345,
 			},
 			verify: func(t *testing.T, output BootstrapOutput) {
+				t.Helper()
 				assert.NotEmpty(t, output.CellID)
 				assert.Greater(t, output.Port, 0)
 				assert.NotEmpty(t, output.WorktreeID)
@@ -98,6 +99,7 @@ func TestBootstrapOutputSerialization(t *testing.T) {
 				ServerPID:    1,
 			},
 			verify: func(t *testing.T, output BootstrapOutput) {
+				t.Helper()
 				assert.Equal(t, "cell-min", output.CellID)
 				assert.Equal(t, 8000, output.Port)
 			},
@@ -113,6 +115,7 @@ func TestBootstrapOutputSerialization(t *testing.T) {
 				ServerPID:    99999,
 			},
 			verify: func(t *testing.T, output BootstrapOutput) {
+				t.Helper()
 				assert.Equal(t, 9999, output.Port)
 				assert.Greater(t, output.ServerPID, 0)
 			},

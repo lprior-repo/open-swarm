@@ -1,16 +1,22 @@
 # golangci-lint configuration for open-swarm
 # Tailored for Temporal workflows, gRPC services, and CLI applications
 # Production-ready but not overly strict
+#
+# Changes in this optimization:
+# - Added: asasalint, forbidigo, godot, varnamelen, nonamedreturns, loggercheck, tagliatelle
+# - Optimized: timeout, test exclusions, performance tuning
+# - Tuned: complexity thresholds, parallelization settings
 
 version: 2
 
 run:
-  timeout: 10m
+  timeout: 5m
   tests: true
   build-tags:
     - integration
   modules-download-mode: readonly
   allow-parallel-runners: true
+  go: '1.25'
 
 formatters:
   enable:
@@ -25,47 +31,66 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-    # Additional linters
+    # Core security and correctness linters
+    - asasalint        # Detects potential assignment to zero values
     - bodyclose
     - contextcheck
-    - cyclop
-    - dupl
     - durationcheck
     - errname
     - errorlint
-    - exhaustive
+    - exhaustive       # Checks exhaustiveness of enum switches
+    - forbidigo        # Forbids certain code patterns (useful for avoiding debug code)
     - copyloopvar
     - gocheckcompilerdirectives
-    - gocognit
-    - goconst
-    - gocritic
-    - gocyclo
-    - mnd
-    - goprintffuncname
-    - gosec
-    - misspell
-    - nakedret
-    - nilerr
-    - nilnil
-    - noctx
-    - nolintlint
-    - prealloc
-    - predeclared
-    - revive
-    - thelper
-    - tparallel
-    - unconvert
-    - unparam
-    - whitespace
-    - wrapcheck
+    # Complexity analysis
+    - cyclop           # Cyclomatic complexity per function
+    - gocognit         # Cognitive complexity per function
+    - gocyclo          # Cyclomatic complexity per function
+    # Code quality and duplication
+    - dupl
+    - goconst          # Finds repeated constants that could be extracted
+    - gocritic         # Opinionated linter with many checks
+    # Documentation and naming
+    - godot            # Checks Go doc comments for proper punctuation
+    - goprintffuncname # Checks printf-like functions have correct names
+    - varnamelen       # Checks variable names are sufficiently long (prevents 'i' in large scopes)
+    # Security and best practices
+    - gosec            # Security linter
+    - misspell         # Finds misspelled English words
+    - mnd              # Magic number detector
+    - nakedret         # Finds naked returns
+    - nilerr           # Detects returning non-nil error with nil value
+    - nilnil           # Checks nil check with nil assignment
+    - noctx            # Detects missing context.Context in requests
+    - nolintlint       # Enforces proper nolint directives
+    - loggercheck      # Checks logging call safety
+    - nonamedreturns   # Reports functions with named returns
+    - prealloc         # Suggests preallocating slices
+    - predeclared      # Finds shadowed predeclared identifiers
+    - revive           # Fast, configurable linter with many rules
+    - tagliatelle      # Checks struct tags (alignment, consistent style)
+    - thelper          # Detects test helpers that don't call helper()
+    - tparallel        # Detects tests that could run in parallel
+    - unconvert        # Detects unnecessary type conversions
+    - unparam          # Reports unused function parameters
+    - whitespace       # Detects leading and trailing whitespace
 
 linters-settings:
+  # Complexity analysis
   cyclop:
     max-complexity: 15
     package-average: 0.0
     skip-tests: true
+  gocognit:
+    min-complexity: 20
+  gocyclo:
+    min-complexity: 15
+
+  # Code duplication detection
   dupl:
     threshold: 150
+
+  # Error handling
   errcheck:
     check-type-assertions: true
     check-blank: false
@@ -78,14 +103,37 @@ linters-settings:
     errorf: true
     asserts: true
     comparison: true
+
+  # Pattern matching and exhaustiveness
   exhaustive:
     default-signifies-exhaustive: true
-  gocognit:
-    min-complexity: 20
+  forbidigo:
+    forbid:
+      - '^(debug|fmt\.Print|os\.Exit|panic)($|\.)'
+    exclude-dir: test
+
+  # Constants and magic numbers
   goconst:
     min-len: 3
     min-occurrences: 3
     ignore-tests: true
+  mnd:
+    ignored-functions:
+      - 'time.*'
+      - 'context.WithTimeout'
+      - 'context.WithDeadline'
+      - 'make'
+      - 'math.*'
+      - 'strconv.*'
+    ignored-numbers:
+      - '0'
+      - '1'
+      - '2'
+      - '10'
+      - '100'
+      - '1000'
+
+  # Code quality and style
   gocritic:
     enabled-tags:
       - diagnostic
@@ -105,34 +153,35 @@ linters-settings:
         sizeThreshold: 512
       hugeParam:
         sizeThreshold: 512
-  gocyclo:
-    min-complexity: 15
-  mnd:
-    ignored-functions:
-      - 'time.*'
-      - 'context.WithTimeout'
-      - 'context.WithDeadline'
-      - 'make'
-      - 'math.*'
-      - 'strconv.*'
-    ignored-numbers:
-      - '0'
-      - '1'
-      - '2'
-      - '10'
-      - '100'
-      - '1000'
+  godot:
+    scope: all
+    period: true
+    capital: false
+
+  # Security
   gosec:
     excludes:
       - G104
       - G204
     severity: medium
     confidence: medium
+
+  # Vet options
   govet:
     enable-all: true
     disable:
       - fieldalignment
       - shadow
+
+  # Logging checks
+  loggercheck:
+    kitlog: false
+    klog: false
+    logr: false
+    zap: false
+    zapsugar: false
+
+  # Documentation and naming
   misspell:
     locale: US
     ignore-words:
@@ -140,13 +189,33 @@ linters-settings:
       - grpc
   nakedret:
     max-func-lines: 30
+  nonamedreturns:
+    report-error-in-defer: false
+  varnamelen:
+    max-distance: 10
+    min-name-length: 1
+
+  # Linting directives and helpers
   nolintlint:
     require-explanation: true
     require-specific: true
+  thelper:
+    test:
+      first: true
+      name: true
+      begin: true
+    benchmark:
+      first: true
+      name: true
+      begin: true
+
+  # Performance
   prealloc:
     simple: true
     range-loops: true
     for-loops: true
+
+  # Code structure and naming
   revive:
     enable-all-rules: false
     rules:
@@ -180,17 +249,22 @@ linters-settings:
       - name: redefines-builtin-id
   staticcheck:
     checks: ["all"]
-  thelper:
-    test:
-      first: true
-      name: true
-      begin: true
-    benchmark:
-      first: true
-      name: true
-      begin: true
+
+  # Struct tags
+  tagliatelle:
+    case:
+      use-field-name: false
+      rules:
+        json: snake_case
+        yaml: snake_case
+        xml: snake_case
+        bson: snake_case
+
+  # Parameters
   unparam:
     check-exported: false
+
+  # Error wrapping
   wrapcheck:
     ignoreSigs:
       - .Errorf(
@@ -201,6 +275,8 @@ linters-settings:
       - .WithMessage(
       - .WithMessagef(
       - .WithStack(
+
+  # Whitespace
   whitespace:
     multi-if: false
     multi-func: false

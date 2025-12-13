@@ -11,6 +11,12 @@ import (
 	"strings"
 )
 
+// Minimum number of matched groups in regex for error location detection
+const MinErrorLocationMatches = 3
+
+// Maximum error message length before truncation
+const MaxErrorMessageLength = 500
+
 // TestFailure represents a single test failure
 type TestFailure struct {
 	// TestName is the name of the failed test (e.g., "TestFoo")
@@ -78,7 +84,7 @@ func (p *TestParser) ParseTestOutput(rawOutput string) *TestParseResult {
 
 	lines := strings.Split(rawOutput, "\n")
 	var failureLines []string
-	var currentFailureIdx int = -1
+	var currentFailureIdx = -1
 	var inErrorBlock bool
 
 	// Regex patterns
@@ -186,7 +192,7 @@ func (p *TestParser) ParseTestOutput(rawOutput string) *TestParseResult {
 		}
 
 		// Detect error location (file:line: message)
-		if matches := errorLocationRegex.FindStringSubmatch(line); len(matches) > 3 {
+		if matches := errorLocationRegex.FindStringSubmatch(line); len(matches) > MinErrorLocationMatches {
 			if currentFailureIdx >= 0 {
 				result.Failures[currentFailureIdx].FileName = matches[1]
 				result.Failures[currentFailureIdx].LineNumber = matches[2]
@@ -262,31 +268,7 @@ func (p *TestParser) GetFailureSummary(result *TestParseResult) string {
 	summary.WriteString("Test Failures:\n")
 
 	for _, failure := range result.Failures {
-		if failure.TestName == "BUILD" {
-			summary.WriteString(fmt.Sprintf("\n❌ Build failed in package: %s\n", failure.Package))
-		} else {
-			summary.WriteString(fmt.Sprintf("\n❌ %s", failure.TestName))
-			if failure.Package != "" {
-				summary.WriteString(fmt.Sprintf(" (package: %s)", failure.Package))
-			}
-			if failure.IsPanic {
-				summary.WriteString(" [PANIC]")
-			}
-			summary.WriteString("\n")
-
-			if failure.FileName != "" && failure.LineNumber != "" {
-				summary.WriteString(fmt.Sprintf("   Location: %s:%s\n", failure.FileName, failure.LineNumber))
-			}
-
-			if failure.ErrorMessage != "" {
-				// Truncate very long error messages
-				errMsg := failure.ErrorMessage
-				if len(errMsg) > 500 {
-					errMsg = errMsg[:500] + "..."
-				}
-				summary.WriteString(fmt.Sprintf("   %s\n", errMsg))
-			}
-		}
+		p.addFailureToSummary(&summary, failure)
 	}
 
 	if result.FailedTests > 0 {
@@ -294,6 +276,53 @@ func (p *TestParser) GetFailureSummary(result *TestParseResult) string {
 	}
 
 	return summary.String()
+}
+
+// addFailureToSummary formats and adds a single failure to the summary
+func (p *TestParser) addFailureToSummary(summary *strings.Builder, failure TestFailure) {
+	if failure.TestName == "BUILD" {
+		p.addBuildFailure(summary, failure)
+	} else {
+		p.addTestFailure(summary, failure)
+	}
+}
+
+// addBuildFailure formats a build failure message
+func (p *TestParser) addBuildFailure(summary *strings.Builder, failure TestFailure) {
+	summary.WriteString(fmt.Sprintf("\n❌ Build failed in package: %s\n", failure.Package))
+}
+
+// addTestFailure formats a test failure message with location and error details
+func (p *TestParser) addTestFailure(summary *strings.Builder, failure TestFailure) {
+	summary.WriteString(fmt.Sprintf("\n❌ %s", failure.TestName))
+	if failure.Package != "" {
+		summary.WriteString(fmt.Sprintf(" (package: %s)", failure.Package))
+	}
+	if failure.IsPanic {
+		summary.WriteString(" [PANIC]")
+	}
+	summary.WriteString("\n")
+
+	p.addFailureLocation(summary, failure)
+	p.addFailureError(summary, failure)
+}
+
+// addFailureLocation adds the file and line number info to the summary
+func (p *TestParser) addFailureLocation(summary *strings.Builder, failure TestFailure) {
+	if failure.FileName != "" && failure.LineNumber != "" {
+		summary.WriteString(fmt.Sprintf("   Location: %s:%s\n", failure.FileName, failure.LineNumber))
+	}
+}
+
+// addFailureError adds the error message (truncated if necessary) to the summary
+func (p *TestParser) addFailureError(summary *strings.Builder, failure TestFailure) {
+	if failure.ErrorMessage != "" {
+		errMsg := failure.ErrorMessage
+		if len(errMsg) > MaxErrorMessageLength {
+			errMsg = errMsg[:MaxErrorMessageLength] + "..."
+		}
+		summary.WriteString(fmt.Sprintf("   %s\n", errMsg))
+	}
 }
 
 // GetRawFailures returns only the failure output without PASS lines or timing

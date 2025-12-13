@@ -238,6 +238,8 @@ func (ra *ReviewAggregator) GetRejectionSummary(votes []ReviewVote) string {
 			rejects++
 		case VoteRequestChange:
 			requestChanges++
+		case VoteApprove:
+			// Count approval votes (no action needed)
 		}
 	}
 

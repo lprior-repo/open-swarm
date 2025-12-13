@@ -27,7 +27,7 @@ type Conflict struct {
 	Requestor        string
 	RequestedPattern string
 	Holders          []Holder
-	ConflictType     ConflictType
+	ConflictType     Type
 }
 
 // Holder represents an agent holding a conflicting reservation
@@ -39,23 +39,32 @@ type Holder struct {
 	ReservationID int
 }
 
-// ConflictType categorizes the type of conflict
-type ConflictType string
+// Type categorizes the type of conflict
+type Type string
 
 const (
-	ConflictTypeExclusiveExclusive ConflictType = "exclusive-exclusive" // Both want exclusive access
-	ConflictTypeExclusiveShared    ConflictType = "exclusive-shared"    // Exclusive vs shared
-	ConflictTypeExpiring           ConflictType = "expiring"            // Conflict but reservation expiring soon
+	// TypeExclusiveExclusive represents a conflict where both want exclusive access
+	TypeExclusiveExclusive Type = "exclusive-exclusive"
+	// TypeExclusiveShared represents a conflict between exclusive and shared requests
+	TypeExclusiveShared Type = "exclusive-shared"
+	// TypeExpiring represents a conflict but reservation expiring soon
+	TypeExpiring Type = "expiring"
 )
 
 // Resolution suggests how to resolve a conflict
 type Resolution string
 
 const (
-	ResolutionWait          Resolution = "wait"           // Wait for reservation to expire
-	ResolutionNegotiate     Resolution = "negotiate"      // Contact holder to negotiate
-	ResolutionForceRelease  Resolution = "force-release"  // Force release stale reservation
-	ResolutionChangePattern Resolution = "change-pattern" // Use different file pattern
+	// ResolutionWait indicates to wait for reservation to expire
+	ResolutionWait Resolution = "wait"
+	// ResolutionNegotiate indicates to contact holder to negotiate
+	ResolutionNegotiate Resolution = "negotiate"
+	// ResolutionForceRelease indicates to force release stale reservation
+	ResolutionForceRelease Resolution = "force-release"
+	// ResolutionChangePattern indicates to use different file pattern
+	ResolutionChangePattern Resolution = "change-pattern"
+	// reservationExpirationThreshold is the time window to consider reservations as expiring soon
+	reservationExpirationThreshold = 5 * time.Minute
 )
 
 // Analyzer detects conflicts in file reservations
@@ -118,7 +127,8 @@ func (a *Analyzer) CheckConflict(ctx context.Context, agentName string, pattern 
 		slog.InfoContext(ctx, "No conflicts found",
 			"agent", agentName,
 			"pattern", pattern)
-		return nil, nil // No conflict
+		//nolint:nilnil // Return nil conflict and nil error to indicate no conflict found
+		return nil, nil
 	}
 
 	// Determine conflict type
@@ -149,8 +159,8 @@ func (a *Analyzer) SuggestResolution(conflict *Conflict) Resolution {
 		"pattern", conflict.RequestedPattern,
 		"num_holders", len(conflict.Holders))
 
-	// Check if any reservations expire soon (within 5 minutes)
-	threshold := time.Now().Add(5 * time.Minute)
+	// Check if any reservations expire soon (within reservationExpirationThreshold)
+	threshold := time.Now().Add(reservationExpirationThreshold)
 	allExpiringSoon := true
 	for _, holder := range conflict.Holders {
 		if holder.ExpiresAt.After(threshold) {
@@ -206,7 +216,7 @@ func (a *Analyzer) FormatConflictReport(conflict *Conflict, resolution Resolutio
 		return "No conflicts detected"
 	}
 
-	report := fmt.Sprintf("❌ CONFLICT DETECTED\n\n")
+	report := "❌ CONFLICT DETECTED\n\n"
 	report += fmt.Sprintf("Requestor: %s\n", conflict.Requestor)
 	report += fmt.Sprintf("Requested pattern: %s\n", conflict.RequestedPattern)
 	report += fmt.Sprintf("Conflict type: %s\n", conflict.ConflictType)
@@ -237,9 +247,9 @@ func (a *Analyzer) FormatConflictReport(conflict *Conflict, resolution Resolutio
 }
 
 // determineConflictType categorizes the conflict
-func (a *Analyzer) determineConflictType(requestExclusive bool, holders []Holder) ConflictType {
+func (a *Analyzer) determineConflictType(requestExclusive bool, holders []Holder) Type {
 	// Check if all expire soon
-	threshold := time.Now().Add(5 * time.Minute)
+	threshold := time.Now().Add(reservationExpirationThreshold)
 	allExpiringSoon := true
 	for _, holder := range holders {
 		if holder.ExpiresAt.After(threshold) {
@@ -249,7 +259,7 @@ func (a *Analyzer) determineConflictType(requestExclusive bool, holders []Holder
 	}
 
 	if allExpiringSoon {
-		return ConflictTypeExpiring
+		return TypeExpiring
 	}
 
 	// Check holder types
@@ -262,10 +272,10 @@ func (a *Analyzer) determineConflictType(requestExclusive bool, holders []Holder
 	}
 
 	if requestExclusive && hasExclusive {
-		return ConflictTypeExclusiveExclusive
+		return TypeExclusiveExclusive
 	}
 
-	return ConflictTypeExclusiveShared
+	return TypeExclusiveShared
 }
 
 // patternsOverlap checks if two file patterns overlap using glob matching

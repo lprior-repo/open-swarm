@@ -1,0 +1,116 @@
+name: Lint
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25.4'
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          args: --timeout=5m --out-format=json
+          output-file: lint-results.json
+
+      - name: Format lint results
+        id: format-results
+        if: always()
+        run: |
+          {
+            echo "LINT_RESULTS<<EOF"
+            if [ -f lint-results.json ]; then
+              # Check if there are any issues
+              if jq -e '.Issues | length > 0' lint-results.json > /dev/null 2>&1; then
+                echo "## Linting Results ❌"
+                echo ""
+                echo "Found linting issues that need to be fixed:"
+                echo ""
+                jq -r '.Issues[] | "- **\(.FromLinter)**: `\(.Pos.Filename):\(.Pos.Line):\(.Pos.Column)` - \(.Text)"' lint-results.json | sort | uniq
+                echo ""
+                echo "**Summary:**"
+                jq -r '.Issues | group_by(.FromLinter) | map({linter: .[0].FromLinter, count: length}) | .[] | "- \(.linter): \(.count) issue(s)"' lint-results.json
+              else
+                echo "## Linting Results ✅"
+                echo ""
+                echo "All checks passed! No linting issues found."
+              fi
+            else
+              echo "## Linting Results ⚠️"
+              echo ""
+              echo "No lint results file found. Check the golangci-lint step for details."
+            fi
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Post results as PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const lintResultsText = `${{ steps.format-results.outputs.LINT_RESULTS }}`;
+
+            // Find existing comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.data.find(comment =>
+              comment.user.type === 'Bot' && comment.body.includes('Linting Results')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: lintResultsText,
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: lintResultsText,
+              });
+            }
+
+      - name: Check for linting failures
+        if: always()
+        run: |
+          if [ -f lint-results.json ]; then
+            ISSUE_COUNT=$(jq '.Issues | length' lint-results.json)
+            if [ "$ISSUE_COUNT" -gt 0 ]; then
+              echo "❌ Linting failed with $ISSUE_COUNT issue(s)"
+              exit 1
+            else
+              echo "✅ Linting passed with no issues"
+              exit 0
+            fi
+          else
+            echo "⚠️ No lint results found"
+            exit 1
+          fi

@@ -19,6 +19,7 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+// AgentResult contains the result of an agent execution.
 type AgentResult struct {
 	AgentID  int
 	Success  bool
@@ -142,7 +143,7 @@ func printResults(results []AgentResult, totalDuration time.Duration) {
 	successCount := 0
 	failCount := 0
 	var totalAgentTime time.Duration
-	var minDuration time.Duration = time.Hour
+	minDuration := time.Hour
 	var maxDuration time.Duration
 
 	fmt.Println("\n" + strings.Repeat("─", 60))

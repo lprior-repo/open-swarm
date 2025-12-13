@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -17,6 +18,13 @@ import (
 type WorktreeManager struct {
 	baseDir string
 	repoDir string
+}
+
+// isValidGitIdentifier validates that a string is safe to use as a git identifier
+// Allows alphanumeric, hyphens, underscores, and dots
+func isValidGitIdentifier(s string) bool {
+	matched, _ := regexp.MatchString(`^[a-zA-Z0-9_.\-]+$`, s)
+	return matched && len(s) > 0
 }
 
 // WorktreeInfo contains information about a worktree
@@ -35,10 +43,24 @@ func NewWorktreeManager(repoDir, baseDir string) *WorktreeManager {
 
 // CreateWorktree creates a new Git worktree for agent isolation
 func (wm *WorktreeManager) CreateWorktree(id string, branch string) (*WorktreeInfo, error) {
+	// Validate id and branch to prevent command injection
+	if id == "" {
+		return nil, fmt.Errorf("worktree id cannot be empty")
+	}
+	if !isValidGitIdentifier(id) {
+		return nil, fmt.Errorf("invalid worktree id: %s", id)
+	}
+	if branch == "" {
+		return nil, fmt.Errorf("branch name cannot be empty")
+	}
+	if !isValidGitIdentifier(branch) {
+		return nil, fmt.Errorf("invalid branch name: %s", branch)
+	}
+
 	worktreePath := filepath.Join(wm.baseDir, id)
 
 	// Ensure base directory exists
-	if err := os.MkdirAll(wm.baseDir, 0755); err != nil {
+	if err := os.MkdirAll(wm.baseDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create worktree base directory: %w", err)
 	}
 
@@ -66,6 +88,14 @@ func (wm *WorktreeManager) CreateWorktree(id string, branch string) (*WorktreeIn
 
 // RemoveWorktree removes a Git worktree
 func (wm *WorktreeManager) RemoveWorktree(id string) error {
+	// Validate id to prevent command injection
+	if id == "" {
+		return fmt.Errorf("worktree id cannot be empty")
+	}
+	if !isValidGitIdentifier(id) {
+		return fmt.Errorf("invalid worktree id: %s", id)
+	}
+
 	worktreePath := filepath.Join(wm.baseDir, id)
 
 	// Remove worktree: git worktree remove <path>

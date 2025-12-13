@@ -16,12 +16,24 @@ import (
 	"go.temporal.io/sdk/testsuite"
 )
 
-// TestTddDagWorkflow_SimpleSuccess tests a simple DAG that succeeds on first attempt
-func TestTddDagWorkflow_SimpleSuccess(t *testing.T) {
+// setupDAGTestEnv creates and returns a new test workflow environment with mock shell activities
+func setupDAGTestEnv() (*testsuite.TestWorkflowEnvironment, *ShellActivities) {
 	testSuite := &testsuite.WorkflowTestSuite{}
 	env := testSuite.NewTestWorkflowEnvironment()
-
 	shellActivities := &ShellActivities{}
+	return env, shellActivities
+}
+
+// executeDAGWorkflowTest executes a DAG workflow and verifies completion
+func executeDAGWorkflowTest(t *testing.T, env *testsuite.TestWorkflowEnvironment, input DAGWorkflowInput) {
+	env.ExecuteWorkflow(TddDagWorkflow, input)
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+}
+
+// TestTddDagWorkflow_SimpleSuccess tests a simple DAG that succeeds on first attempt
+func TestTddDagWorkflow_SimpleSuccess(t *testing.T) {
+	env, shellActivities := setupDAGTestEnv()
 
 	// All tasks succeed
 	env.OnActivity(shellActivities.RunScript, mock.Anything, "echo task1").Return("task1 output", nil)
@@ -36,18 +48,12 @@ func TestTddDagWorkflow_SimpleSuccess(t *testing.T) {
 		},
 	}
 
-	env.ExecuteWorkflow(TddDagWorkflow, input)
-
-	require.True(t, env.IsWorkflowCompleted())
-	require.NoError(t, env.GetWorkflowError())
+	executeDAGWorkflowTest(t, env, input)
 }
 
 // TestTddDagWorkflow_ParallelExecution tests that independent tasks run in parallel
 func TestTddDagWorkflow_ParallelExecution(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
-
-	shellActivities := &ShellActivities{}
+	env, shellActivities := setupDAGTestEnv()
 
 	// Setup task succeeds
 	env.OnActivity(shellActivities.RunScript, mock.Anything, "npm install").Return("installed", nil)
@@ -70,18 +76,12 @@ func TestTddDagWorkflow_ParallelExecution(t *testing.T) {
 		},
 	}
 
-	env.ExecuteWorkflow(TddDagWorkflow, input)
-
-	require.True(t, env.IsWorkflowCompleted())
-	require.NoError(t, env.GetWorkflowError())
+	executeDAGWorkflowTest(t, env, input)
 }
 
 // TestTddDagWorkflow_TaskFailureAndRetry tests TDD loop with failure and retry
 func TestTddDagWorkflow_TaskFailureAndRetry(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
-
-	shellActivities := &ShellActivities{}
+	env, shellActivities := setupDAGTestEnv()
 
 	// First attempt: task1 succeeds, task2 fails
 	env.OnActivity(shellActivities.RunScript, mock.Anything, "echo task1").Return("task1 output", nil).Once()
@@ -105,10 +105,7 @@ func TestTddDagWorkflow_TaskFailureAndRetry(t *testing.T) {
 		},
 	}
 
-	env.ExecuteWorkflow(TddDagWorkflow, input)
-
-	require.True(t, env.IsWorkflowCompleted())
-	require.NoError(t, env.GetWorkflowError())
+	executeDAGWorkflowTest(t, env, input)
 }
 
 // TestTddDagWorkflow_CycleDetection tests that cycles are detected
@@ -145,10 +142,7 @@ func TestTddDagWorkflow_CycleDetection(t *testing.T) {
 
 // TestTddDagWorkflow_DiamondDependency tests diamond-shaped dependency graph
 func TestTddDagWorkflow_DiamondDependency(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
-
-	shellActivities := &ShellActivities{}
+	env, shellActivities := setupDAGTestEnv()
 
 	// Setup all task mocks
 	env.OnActivity(shellActivities.RunScript, mock.Anything, "echo a").Return("a done", nil)
@@ -167,18 +161,12 @@ func TestTddDagWorkflow_DiamondDependency(t *testing.T) {
 		},
 	}
 
-	env.ExecuteWorkflow(TddDagWorkflow, input)
-
-	require.True(t, env.IsWorkflowCompleted())
-	require.NoError(t, env.GetWorkflowError())
+	executeDAGWorkflowTest(t, env, input)
 }
 
 // TestTddDagWorkflow_MultipleIndependentChains tests multiple independent task chains
 func TestTddDagWorkflow_MultipleIndependentChains(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
-
-	shellActivities := &ShellActivities{}
+	env, shellActivities := setupDAGTestEnv()
 
 	// Chain 1
 	env.OnActivity(shellActivities.RunScript, mock.Anything, "echo task1").Return("task1 done", nil)
@@ -199,10 +187,7 @@ func TestTddDagWorkflow_MultipleIndependentChains(t *testing.T) {
 		},
 	}
 
-	env.ExecuteWorkflow(TddDagWorkflow, input)
-
-	require.True(t, env.IsWorkflowCompleted())
-	require.NoError(t, env.GetWorkflowError())
+	executeDAGWorkflowTest(t, env, input)
 }
 
 // TestTddDagWorkflow_SingleTask tests DAG with single task
@@ -211,10 +196,7 @@ func TestTddDagWorkflow_MultipleIndependentChains(t *testing.T) {
 func TestTddDagWorkflow_SingleTask(t *testing.T) {
 	t.Skip("Known limitation: toposort doesn't include nodes without edges")
 
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
-
-	shellActivities := &ShellActivities{}
+	env, shellActivities := setupDAGTestEnv()
 
 	env.OnActivity(shellActivities.RunScript, mock.Anything, "echo single").Return("single done", nil)
 
@@ -226,18 +208,12 @@ func TestTddDagWorkflow_SingleTask(t *testing.T) {
 		},
 	}
 
-	env.ExecuteWorkflow(TddDagWorkflow, input)
-
-	require.True(t, env.IsWorkflowCompleted())
-	require.NoError(t, env.GetWorkflowError())
+	executeDAGWorkflowTest(t, env, input)
 }
 
 // TestTddDagWorkflow_ComplexDAG tests a complex multi-stage DAG
 func TestTddDagWorkflow_ComplexDAG(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
-
-	shellActivities := &ShellActivities{}
+	env, shellActivities := setupDAGTestEnv()
 
 	// Mock all tasks
 	commands := []string{
@@ -268,18 +244,12 @@ func TestTddDagWorkflow_ComplexDAG(t *testing.T) {
 		},
 	}
 
-	env.ExecuteWorkflow(TddDagWorkflow, input)
-
-	require.True(t, env.IsWorkflowCompleted())
-	require.NoError(t, env.GetWorkflowError())
+	executeDAGWorkflowTest(t, env, input)
 }
 
 // TestTddDagWorkflow_FailureInMiddleOfDAG tests failure in middle of execution
 func TestTddDagWorkflow_FailureInMiddleOfDAG(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
-
-	shellActivities := &ShellActivities{}
+	env, shellActivities := setupDAGTestEnv()
 
 	// First attempt: task1 succeeds, task2 fails
 	env.OnActivity(shellActivities.RunScript, mock.Anything, "echo task1").Return("task1 done", nil).Once()
@@ -304,18 +274,12 @@ func TestTddDagWorkflow_FailureInMiddleOfDAG(t *testing.T) {
 		},
 	}
 
-	env.ExecuteWorkflow(TddDagWorkflow, input)
-
-	require.True(t, env.IsWorkflowCompleted())
-	require.NoError(t, env.GetWorkflowError())
+	executeDAGWorkflowTest(t, env, input)
 }
 
 // TestTddDagWorkflow_MultipleRetries tests multiple retry cycles
 func TestTddDagWorkflow_MultipleRetries(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
-
-	shellActivities := &ShellActivities{}
+	env, shellActivities := setupDAGTestEnv()
 
 	// Attempt 1: task1 succeeds, task2 fails
 	env.OnActivity(shellActivities.RunScript, mock.Anything, "echo task1").Return("task1 done", nil).Once()
@@ -354,10 +318,7 @@ func TestTddDagWorkflow_MultipleRetries(t *testing.T) {
 		},
 	}
 
-	env.ExecuteWorkflow(TddDagWorkflow, input)
-
-	require.True(t, env.IsWorkflowCompleted())
-	require.NoError(t, env.GetWorkflowError())
+	executeDAGWorkflowTest(t, env, input)
 }
 
 // TestRunDag_ToposortOrdering tests that tasks are executed in correct topological order
@@ -518,15 +479,13 @@ func TestTask_Structure(t *testing.T) {
 
 // TestTddDagWorkflow_EmptyTaskList tests behavior with empty task list
 func TestTddDagWorkflow_EmptyTaskList(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
+	env, shellActivities := setupDAGTestEnv()
 
 	// Empty task list will cause "DAG stalled" error and wait for signal
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow("FixApplied", "Tasks added")
 	}, 0)
 
-	shellActivities := &ShellActivities{}
 	env.OnActivity(shellActivities.RunScript, mock.Anything, mock.Anything).Return("done", nil)
 
 	input := DAGWorkflowInput{
@@ -542,10 +501,7 @@ func TestTddDagWorkflow_EmptyTaskList(t *testing.T) {
 
 // TestTddDagWorkflow_SignalHandling tests that FixApplied signal is properly handled
 func TestTddDagWorkflow_SignalHandling(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
-
-	shellActivities := &ShellActivities{}
+	env, shellActivities := setupDAGTestEnv()
 
 	// First attempt: setup succeeds, test fails
 	env.OnActivity(shellActivities.RunScript, mock.Anything, "echo setup").Return("setup done", nil).Once()
@@ -569,18 +525,12 @@ func TestTddDagWorkflow_SignalHandling(t *testing.T) {
 		},
 	}
 
-	env.ExecuteWorkflow(TddDagWorkflow, input)
-
-	require.True(t, env.IsWorkflowCompleted())
-	require.NoError(t, env.GetWorkflowError())
+	executeDAGWorkflowTest(t, env, input)
 }
 
 // TestTddDagWorkflow_LongRunningTasks tests DAG with simulated long-running tasks
 func TestTddDagWorkflow_LongRunningTasks(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
-
-	shellActivities := &ShellActivities{}
+	env, shellActivities := setupDAGTestEnv()
 
 	// Simulate long-running tasks
 	env.OnActivity(shellActivities.RunScript, mock.Anything, "sleep 10 && echo done").Return("done", nil)
@@ -595,8 +545,5 @@ func TestTddDagWorkflow_LongRunningTasks(t *testing.T) {
 		},
 	}
 
-	env.ExecuteWorkflow(TddDagWorkflow, input)
-
-	require.True(t, env.IsWorkflowCompleted())
-	require.NoError(t, env.GetWorkflowError())
+	executeDAGWorkflowTest(t, env, input)
 }

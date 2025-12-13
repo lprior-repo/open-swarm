@@ -32,11 +32,16 @@ type Task struct {
 // GetTask retrieves a task from Beads issues.jsonl
 func GetTask(taskID string) (*Task, error) {
 	jsonlPath := getJSONLPath()
+	// #nosec G304 - jsonlPath is from getJSONLPath which returns hardcoded .beads/issues.jsonl
 	file, err := os.Open(jsonlPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open %s: %w", jsonlPath, err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			err = fmt.Errorf("failed to close file: %w", closeErr)
+		}
+	}()
 
 	decoder := json.NewDecoder(file)
 	for decoder.More() {

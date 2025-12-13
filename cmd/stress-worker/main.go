@@ -3,6 +3,7 @@
 // This software is released under the MIT License.
 // See LICENSE file in the repository for details.
 
+// Package main implements a Temporal worker for stress testing.
 package main
 
 import (

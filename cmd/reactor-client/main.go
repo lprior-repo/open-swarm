@@ -60,10 +60,10 @@ func main() {
 
 	case "dag":
 		// Example: Parse tasks from JSON file or flags
-		log.Fatal("❌ DAG workflow not implemented in CLI yet")
+		err = fmt.Errorf("DAG workflow not implemented in CLI yet")
 
 	default:
-		log.Fatalf("❌ Unknown workflow type: %s", *workflowType)
+		err = fmt.Errorf("unknown workflow type: %s", *workflowType)
 	}
 
 	if err != nil {

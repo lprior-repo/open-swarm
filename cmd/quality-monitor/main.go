@@ -16,6 +16,10 @@ import (
 	"time"
 )
 
+const (
+	minCoverageThreshold = 80.0
+)
+
 // QualityReport represents a comprehensive quality check report
 type QualityReport struct {
 	Timestamp       time.Time       `json:"timestamp"`
@@ -129,16 +133,17 @@ func runTestSuite(report *QualityReport) {
 	// Parse output
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
-		if strings.HasPrefix(line, "ok") {
+		switch {
+		case strings.HasPrefix(line, "ok"):
 			report.TestResults.Passing++
-		} else if strings.HasPrefix(line, "FAIL") {
+		case strings.HasPrefix(line, "FAIL"):
 			report.TestResults.Failing++
 			// Extract package name
 			parts := strings.Fields(line)
 			if len(parts) > 1 {
 				report.TestResults.FailedPackages = append(report.TestResults.FailedPackages, parts[1])
 			}
-		} else if strings.Contains(line, "[build failed]") {
+		case strings.Contains(line, "[build failed]"):
 			report.TestResults.BuildErrors++
 		}
 	}
@@ -184,7 +189,9 @@ func runCoverageCheck(report *QualityReport) {
 
 			if covMatches := coverageRegex.FindStringSubmatch(checkLine); covMatches != nil {
 				coverage := 0.0
-				fmt.Sscanf(covMatches[1], "%f", &coverage)
+				if _, err := fmt.Sscanf(covMatches[1], "%f", &coverage); err != nil {
+					log.Printf("Warning: failed to parse coverage: %v", err)
+				}
 
 				report.CoverageResults.PackageCoverage[pkg] = coverage
 				totalCoverage += coverage
@@ -192,7 +199,7 @@ func runCoverageCheck(report *QualityReport) {
 
 				if coverage == 0 {
 					report.CoverageResults.ZeroCoverage = append(report.CoverageResults.ZeroCoverage, pkg)
-				} else if coverage < 80 {
+				} else if coverage < minCoverageThreshold {
 					report.CoverageResults.Below80Percent = append(report.CoverageResults.Below80Percent, pkg)
 				}
 			}
@@ -236,6 +243,7 @@ func runLintCheck(report *QualityReport) {
 	fmt.Println("--- Running Linter ---")
 
 	lintCmd := filepath.Join(os.Getenv("HOME"), "go", "bin", "golangci-lint")
+	// #nosec G204 - lintCmd path is constructed from hardcoded string and trusted HOME environment
 	cmd := exec.Command(lintCmd, "run", "--timeout=5m")
 	output, err := cmd.CombinedOutput()
 
@@ -363,7 +371,7 @@ func generateRecommendations(report *QualityReport) {
 			fmt.Sprintf("CRITICAL: Resolve %d critical linting issues", len(report.LintResults.CriticalIssues)))
 	}
 
-	if report.CoverageResults.OverallCoverage < 80.0 {
+	if report.CoverageResults.OverallCoverage < minCoverageThreshold {
 		report.Recommendations = append(report.Recommendations,
 			fmt.Sprintf("MEDIUM: Increase test coverage from %.1f%% to 80%%", report.CoverageResults.OverallCoverage))
 	}
@@ -385,15 +393,16 @@ func generateRecommendations(report *QualityReport) {
 }
 
 func determineOverallStatus(report *QualityReport) {
-	if report.TestResults.BuildErrors > 0 ||
+	switch {
+	case report.TestResults.BuildErrors > 0 ||
 		report.TestResults.Failing > 0 ||
-		len(report.LintResults.CriticalIssues) > 0 {
+		len(report.LintResults.CriticalIssues) > 0:
 		report.OverallStatus = "FAILING"
-	} else if report.CoverageResults.OverallCoverage < 80.0 ||
+	case report.CoverageResults.OverallCoverage < minCoverageThreshold ||
 		!report.FormatResults.Passing ||
-		report.LintResults.IssueCount > 0 {
+		report.LintResults.IssueCount > 0:
 		report.OverallStatus = "NEEDS_IMPROVEMENT"
-	} else {
+	default:
 		report.OverallStatus = "PASSING"
 	}
 }
@@ -432,7 +441,10 @@ func formatStatus(passing bool) string {
 
 func saveReport(report *QualityReport) {
 	reportDir := "/tmp/quality-reports"
-	os.MkdirAll(reportDir, 0755)
+	if err := os.MkdirAll(reportDir, 0755); err != nil {
+		fmt.Printf("Failed to create report directory: %v\n", err)
+		return
+	}
 
 	filename := filepath.Join(reportDir,
 		fmt.Sprintf("quality-report-%s.json", report.Timestamp.Format("2006-01-02-150405")))

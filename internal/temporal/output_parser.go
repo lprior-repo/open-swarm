@@ -56,60 +56,85 @@ func (p *OutputParser) ParseFilePaths(rawOutput string, actualFiles []opencode.F
 
 	// Extract file paths from output
 	extracted := p.extractPaths(rawOutput)
-
-	// Remove duplicates
 	extracted = removeDuplicates(extracted)
 	result.ExtractedPaths = extracted
 
 	// Build map of actual file paths for quick lookup
-	actualPathMap := make(map[string]bool)
-	for _, file := range actualFiles {
-		if file.Path != "" {
-			actualPathMap[file.Path] = true
-		}
+	actualPathMap := p.buildActualPathMap(actualFiles)
+
+	// Handle case with no extracted paths
+	if len(extracted) == 0 {
+		p.handleNoExtractedPaths(result, actualFiles)
+		return result
 	}
 
-	// If no paths extracted but we have actual files, try suffix matching
-	if len(extracted) == 0 && len(actualFiles) > 0 {
+	// Validate extracted paths against actual files
+	p.validateExtractedPaths(result, extracted, actualPathMap)
+
+	// Find and record unexpected files
+	p.findUnexpectedFiles(result, actualPathMap)
+
+	result.Valid = len(result.ValidatedPaths) > 0 || len(result.UnexpectedPaths) > 0
+	return result
+}
+
+// buildActualPathMap creates a map for fast lookup of actual file paths
+func (p *OutputParser) buildActualPathMap(actualFiles []opencode.File) map[string]bool {
+	pathMap := make(map[string]bool)
+	for _, file := range actualFiles {
+		if file.Path != "" {
+			pathMap[file.Path] = true
+		}
+	}
+	return pathMap
+}
+
+// handleNoExtractedPaths handles the case when no paths are extracted from output
+func (p *OutputParser) handleNoExtractedPaths(result *FileParseResult, actualFiles []opencode.File) {
+	if len(actualFiles) > 0 {
 		result.Warnings = append(result.Warnings, "No explicit file paths found in output, falling back to actual modified files")
 		for _, file := range actualFiles {
 			if file.Path != "" {
 				result.ValidatedPaths = append(result.ValidatedPaths, file.Path)
 			}
 		}
-		result.Valid = len(result.ValidatedPaths) > 0
-		return result
 	}
+	result.Valid = len(result.ValidatedPaths) > 0
+}
 
-	// Validate extracted paths against actual files
+// validateExtractedPaths validates extracted paths against actual files
+func (p *OutputParser) validateExtractedPaths(result *FileParseResult, extracted []string, actualPathMap map[string]bool) {
 	for _, extractedPath := range extracted {
-		matched := false
-
 		// Try exact match first
 		if actualPathMap[extractedPath] {
 			result.ValidatedPaths = append(result.ValidatedPaths, extractedPath)
-			matched = true
 			continue
 		}
 
 		// Try suffix matching (e.g., "foo.go" matches "pkg/foo.go")
-		for actualPath := range actualPathMap {
-			if strings.HasSuffix(actualPath, extractedPath) {
-				result.ValidatedPaths = append(result.ValidatedPaths, actualPath)
-				matched = true
-				if actualPath != extractedPath {
-					result.Warnings = append(result.Warnings, fmt.Sprintf("Matched '%s' to '%s' via suffix", extractedPath, actualPath))
-				}
-				break
-			}
-		}
-
+		matched := p.trySuffixMatch(result, extractedPath, actualPathMap)
 		if !matched {
 			result.MissingPaths = append(result.MissingPaths, extractedPath)
 		}
 	}
+}
 
-	// Find unexpected files (modified but not mentioned)
+// trySuffixMatch attempts to match a path using suffix matching
+func (p *OutputParser) trySuffixMatch(result *FileParseResult, extractedPath string, actualPathMap map[string]bool) bool {
+	for actualPath := range actualPathMap {
+		if strings.HasSuffix(actualPath, extractedPath) {
+			result.ValidatedPaths = append(result.ValidatedPaths, actualPath)
+			if actualPath != extractedPath {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("Matched '%s' to '%s' via suffix", extractedPath, actualPath))
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// findUnexpectedFiles finds modified files not mentioned in output
+func (p *OutputParser) findUnexpectedFiles(result *FileParseResult, actualPathMap map[string]bool) {
 	validatedMap := make(map[string]bool)
 	for _, path := range result.ValidatedPaths {
 		validatedMap[path] = true
@@ -124,26 +149,16 @@ func (p *OutputParser) ParseFilePaths(rawOutput string, actualFiles []opencode.F
 	if len(result.UnexpectedPaths) > 0 {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("%d file(s) modified but not mentioned in output", len(result.UnexpectedPaths)))
 	}
-
-	result.Valid = len(result.ValidatedPaths) > 0 || len(result.UnexpectedPaths) > 0
-
-	return result
 }
 
 // extractPaths extracts file paths from raw text output
 func (p *OutputParser) extractPaths(rawOutput string) []string {
 	var paths []string
-
 	lines := strings.Split(rawOutput, "\n")
 
-	// Pattern 1: "FILE: path/to/file.go"
+	// Compile regexes once
 	filePrefixRegex := regexp.MustCompile(`(?i)FILE:\s*([^\s]+)`)
-
-	// Pattern 2: "Modified: path/to/file.go" or "Created: path/to/file.go"
 	modifiedPrefixRegex := regexp.MustCompile(`(?i)(Modified|Created|Updated|Changed):\s*([^\s]+)`)
-
-	// Pattern 3: Standalone paths with common extensions
-	// Note: Longer extensions must come first (tsx before ts, jsx before js)
 	standalonePrefixRegex := regexp.MustCompile(`([a-zA-Z0-9_\-./]+\.(tsx|jsx|go|ts|js|py|java|cpp|c|h|rs|rb|php|cs|swift))`)
 
 	for _, line := range lines {
@@ -152,39 +167,50 @@ func (p *OutputParser) extractPaths(rawOutput string) []string {
 			continue
 		}
 
-		// Try FILE: prefix
-		if matches := filePrefixRegex.FindStringSubmatch(line); len(matches) > 1 {
-			path := strings.TrimSpace(matches[1])
-			if path != "" {
-				paths = append(paths, path)
-			}
-			continue
-		}
-
-		// Try Modified/Created prefix
-		if matches := modifiedPrefixRegex.FindStringSubmatch(line); len(matches) > 2 {
-			path := strings.TrimSpace(matches[2])
-			if path != "" {
-				paths = append(paths, path)
-			}
-			continue
-		}
-
-		// Try standalone file paths (be conservative to avoid false positives)
-		if matches := standalonePrefixRegex.FindAllStringSubmatch(line, -1); len(matches) > 0 {
-			for _, match := range matches {
-				if len(match) > 1 {
-					path := strings.TrimSpace(match[1])
-					// Only add if it looks like a real path (contains / or is just a filename)
-					if path != "" && (strings.Contains(path, "/") || !strings.Contains(path, " ")) {
-						paths = append(paths, path)
-					}
-				}
-			}
-		}
+		p.extractFromLine(&paths, line, filePrefixRegex, modifiedPrefixRegex, standalonePrefixRegex)
 	}
 
 	return paths
+}
+
+// extractFromLine tries to extract paths from a single line using various patterns
+func (p *OutputParser) extractFromLine(paths *[]string, line string, fileRegex, modifiedRegex, standaloneRegex *regexp.Regexp) {
+	// Try FILE: prefix
+	if matches := fileRegex.FindStringSubmatch(line); len(matches) > 1 {
+		if path := strings.TrimSpace(matches[1]); path != "" {
+			*paths = append(*paths, path)
+		}
+		return
+	}
+
+	// Try Modified/Created prefix
+	if matches := modifiedRegex.FindStringSubmatch(line); len(matches) > 2 {
+		if path := strings.TrimSpace(matches[2]); path != "" {
+			*paths = append(*paths, path)
+		}
+		return
+	}
+
+	// Try standalone file paths (be conservative to avoid false positives)
+	p.extractStandalonePaths(paths, line, standaloneRegex)
+}
+
+// extractStandalonePaths extracts standalone file paths from a line
+func (p *OutputParser) extractStandalonePaths(paths *[]string, line string, regex *regexp.Regexp) {
+	matches := regex.FindAllStringSubmatch(line, -1)
+	if len(matches) == 0 {
+		return
+	}
+
+	for _, match := range matches {
+		if len(match) > 1 {
+			path := strings.TrimSpace(match[1])
+			// Only add if it looks like a real path (contains / or is just a filename)
+			if path != "" && (strings.Contains(path, "/") || !strings.Contains(path, " ")) {
+				*paths = append(*paths, path)
+			}
+		}
+	}
 }
 
 // GetAllModifiedPaths returns all paths that should be tracked (validated + unexpected)

@@ -18,6 +18,13 @@ import (
 	"open-swarm/internal/temporal"
 )
 
+const (
+	maxConcurrentActivityExecutionSize      = 50  // Match MaxConcurrentAgents
+	maxConcurrentWorkflowTaskExecutionSize  = 10
+	maxConcurrentLocalActivityExecutionSize = 100
+	workerStopTimeout                       = 30 * time.Second
+)
+
 func main() {
 	log.Println("🚀 Reactor-SDK Temporal Worker v6.1.0")
 
@@ -32,16 +39,21 @@ func main() {
 	if err != nil {
 		log.Fatalln("❌ Unable to create Temporal client:", err)
 	}
-	defer c.Close()
+
+	defer func() {
+		if c != nil {
+			c.Close()
+		}
+	}()
 
 	log.Println("✅ Connected to Temporal server")
 
 	// Create worker on task queue
 	w := worker.New(c, "reactor-task-queue", worker.Options{
-		MaxConcurrentActivityExecutionSize:      50, // Match MaxConcurrentAgents
-		MaxConcurrentWorkflowTaskExecutionSize:  10,
-		MaxConcurrentLocalActivityExecutionSize: 100,
-		WorkerStopTimeout:                       30 * time.Second,
+		MaxConcurrentActivityExecutionSize:      maxConcurrentActivityExecutionSize,
+		MaxConcurrentWorkflowTaskExecutionSize:  maxConcurrentWorkflowTaskExecutionSize,
+		MaxConcurrentLocalActivityExecutionSize: maxConcurrentLocalActivityExecutionSize,
+		WorkerStopTimeout:                       workerStopTimeout,
 	})
 
 	// Register workflows
@@ -76,7 +88,8 @@ func main() {
 
 	select {
 	case err := <-errChan:
-		log.Fatalln("❌ Worker error:", err)
+		log.Println("❌ Worker error:", err)
+		os.Exit(1)
 	case <-sigChan:
 		log.Println("\n🛑 Shutdown signal received")
 	}

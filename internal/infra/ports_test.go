@@ -109,7 +109,7 @@ func TestPortManager_IsAllocated(t *testing.T) {
 		t.Errorf("Port %d should not be allocated", port+1)
 	}
 
-	pm.Release(port)
+	_ = pm.Release(port)
 
 	if pm.IsAllocated(port) {
 		t.Errorf("Port %d should not be allocated after release", port)
@@ -129,7 +129,7 @@ func TestPortManager_AvailableCount(t *testing.T) {
 		t.Errorf("Expected 10 available ports after allocation, got %d", available)
 	}
 
-	pm.Release(port)
+	_ = pm.Release(port)
 
 	if available := pm.AvailableCount(); available != 11 {
 		t.Errorf("Expected 11 available ports after release, got %d", available)

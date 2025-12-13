@@ -28,7 +28,8 @@ func TestLoad(t *testing.T) {
 			setupFunc: func(t *testing.T) string {
 				tmpDir := t.TempDir()
 				claudeDir := filepath.Join(tmpDir, ".claude")
-				require.NoError(t, os.Mkdir(claudeDir, 0755))
+				// #nosec G301 - restricted permissions appropriate for test
+				require.NoError(t, os.Mkdir(claudeDir, 0750))
 
 				configContent := `
 project:
@@ -92,7 +93,7 @@ build:
 
 				// Store old dir for cleanup
 				t.Cleanup(func() {
-					os.Chdir(oldDir)
+					_ = os.Chdir(oldDir)
 				})
 
 				return tmpDir
@@ -119,7 +120,7 @@ build:
 				require.NoError(t, os.Chdir(tmpDir))
 
 				t.Cleanup(func() {
-					os.Chdir(oldDir)
+					_ = os.Chdir(oldDir)
 				})
 
 				return tmpDir
@@ -140,14 +141,14 @@ project:
   invalid yaml syntax here: [
 `
 				configPath := filepath.Join(claudeDir, "opencode.yaml")
-				require.NoError(t, os.WriteFile(configPath, []byte(invalidYAML), 0644))
+				require.NoError(t, os.WriteFile(configPath, []byte(invalidYAML), 0600))
 
 				oldDir, err := os.Getwd()
 				require.NoError(t, err)
 				require.NoError(t, os.Chdir(tmpDir))
 
 				t.Cleanup(func() {
-					os.Chdir(oldDir)
+					_ = os.Chdir(oldDir)
 				})
 
 				return tmpDir
@@ -173,14 +174,14 @@ coordination:
     model: "anthropic/claude-3-5-sonnet-20241022"
 `
 				configPath := filepath.Join(claudeDir, "opencode.yaml")
-				require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
+				require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0600))
 
 				oldDir, err := os.Getwd()
 				require.NoError(t, err)
 				require.NoError(t, os.Chdir(tmpDir))
 
 				t.Cleanup(func() {
-					os.Chdir(oldDir)
+					_ = os.Chdir(oldDir)
 				})
 
 				return tmpDir
@@ -210,14 +211,14 @@ coordination:
     model: "test-model"
 `
 				configPath := filepath.Join(claudeDir, "opencode.yaml")
-				require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
+				require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0600))
 
 				oldDir, err := os.Getwd()
 				require.NoError(t, err)
 				require.NoError(t, os.Chdir(tmpDir))
 
 				t.Cleanup(func() {
-					os.Chdir(oldDir)
+					_ = os.Chdir(oldDir)
 				})
 
 				return tmpDir

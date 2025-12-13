@@ -13,6 +13,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// findNodeIndices finds the indices of specified nodes in a sorted list
+func findNodeIndices(sorted []interface{}, nodeNames []string) map[string]int {
+	indices := make(map[string]int)
+	for _, name := range nodeNames {
+		indices[name] = -1
+	}
+	for i, node := range sorted {
+		if _, exists := indices[node.(string)]; exists {
+			indices[node.(string)] = i
+		}
+	}
+	return indices
+}
+
 // TestDAGToposort tests the topological sorting of DAG tasks
 func TestDAGToposort(t *testing.T) {
 	tests := []struct {
@@ -34,20 +48,9 @@ func TestDAGToposort(t *testing.T) {
 			shouldError:        false,
 			verifyOrder: func(t *testing.T, sorted []interface{}) {
 				// task1 should come before task2, task2 before task3
-				task1Idx := -1
-				task2Idx := -1
-				task3Idx := -1
-				for i, node := range sorted {
-					if node == "task1" {
-						task1Idx = i
-					} else if node == "task2" {
-						task2Idx = i
-					} else if node == "task3" {
-						task3Idx = i
-					}
-				}
-				assert.Greater(t, task2Idx, task1Idx, "task1 should come before task2")
-				assert.Greater(t, task3Idx, task2Idx, "task2 should come before task3")
+				indices := findNodeIndices(sorted, []string{"task1", "task2", "task3"})
+				assert.Greater(t, indices["task2"], indices["task1"], "task1 should come before task2")
+				assert.Greater(t, indices["task3"], indices["task2"], "task2 should come before task3")
 			},
 		},
 		{

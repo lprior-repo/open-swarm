@@ -14,6 +14,21 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+// Activity execution timeouts
+const (
+	// DAGStartToCloseTimeout is the maximum time for executing a DAG task
+	DAGStartToCloseTimeout = 10 * time.Minute
+
+	// DAGHeartbeatTimeout is the heartbeat timeout for DAG activities
+	DAGHeartbeatTimeout = 30 * time.Second
+
+	// DAGRetryBackoffCoefficient is the exponential backoff coefficient for DAG retries
+	DAGRetryBackoffCoefficient = 2.0
+
+	// DAGRetryMaxAttempts is the maximum number of retry attempts for DAG tasks
+	DAGRetryMaxAttempts = 3
+)
+
 // Task represents a node in the DAG
 type Task struct {
 	Name    string
@@ -103,13 +118,13 @@ func runDag(ctx workflow.Context, tasks []Task) error {
 
 	// Activity options
 	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Minute,
-		HeartbeatTimeout:    30 * time.Second,
+		StartToCloseTimeout: DAGStartToCloseTimeout,
+		HeartbeatTimeout:    DAGHeartbeatTimeout,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    1 * time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumInterval:    30 * time.Second,
-			MaximumAttempts:    3,
+			BackoffCoefficient: DAGRetryBackoffCoefficient,
+			MaximumInterval:    DAGHeartbeatTimeout,
+			MaximumAttempts:    DAGRetryMaxAttempts,
 		},
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)

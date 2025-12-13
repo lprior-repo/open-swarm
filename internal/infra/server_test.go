@@ -85,7 +85,7 @@ func TestServerManager_BootServer_Integration(t *testing.T) {
 	assert.Contains(t, handle.BaseURL, "localhost")
 
 	// Test health check
-	healthy := sm.IsHealthy(handle)
+	healthy := sm.IsHealthy(ctx, handle)
 	assert.True(t, healthy, "Server should be healthy after boot")
 }
 

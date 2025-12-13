@@ -29,16 +29,26 @@ type EnhancedTCRResult struct {
 type WorkflowState string
 
 const (
-	StateBootstrap   WorkflowState = "bootstrap"
-	StateGenTest     WorkflowState = "gen_test"
-	StateLintTest    WorkflowState = "lint_test"
-	StateVerifyRED   WorkflowState = "verify_red"
-	StateGenImpl     WorkflowState = "gen_impl"
+	// StateBootstrap represents the initial bootstrap state
+	StateBootstrap WorkflowState = "bootstrap"
+	// StateGenTest represents the test generation state
+	StateGenTest WorkflowState = "gen_test"
+	// StateLintTest represents the lint testing state
+	StateLintTest WorkflowState = "lint_test"
+	// StateVerifyRED represents the RED verification state
+	StateVerifyRED WorkflowState = "verify_red"
+	// StateGenImpl represents the implementation generation state
+	StateGenImpl WorkflowState = "gen_impl"
+	// StateVerifyGREEN represents the GREEN verification state
 	StateVerifyGREEN WorkflowState = "verify_green"
+	// StateMultiReview represents the multi-reviewer approval state
 	StateMultiReview WorkflowState = "multi_review"
-	StateCommit      WorkflowState = "commit"
-	StateComplete    WorkflowState = "complete"
-	StateFailed      WorkflowState = "failed"
+	// StateCommit represents the commit state
+	StateCommit WorkflowState = "commit"
+	// StateComplete represents the completion state
+	StateComplete WorkflowState = "complete"
+	// StateFailed represents the failed state
+	StateFailed WorkflowState = "failed"
 )
 
 // GateResult represents the result of a single gate in the workflow
@@ -109,16 +119,22 @@ type ReviewVote struct {
 type ReviewType string
 
 const (
-	ReviewTypeTesting      ReviewType = "testing"      // Tests coverage, quality, edge cases
-	ReviewTypeFunctional   ReviewType = "functional"   // Correctness, requirements, behavior
-	ReviewTypeArchitecture ReviewType = "architecture" // Design, patterns, maintainability
+	// ReviewTypeTesting represents testing focus review
+	ReviewTypeTesting ReviewType = "testing"
+	// ReviewTypeFunctional represents functional correctness review
+	ReviewTypeFunctional ReviewType = "functional"
+	// ReviewTypeArchitecture represents architecture and design review
+	ReviewTypeArchitecture ReviewType = "architecture"
 )
 
 // VoteResult represents a reviewer's decision
 type VoteResult string
 
 const (
-	VoteApprove       VoteResult = "APPROVE"        // Implementation is good
-	VoteRequestChange VoteResult = "REQUEST_CHANGE" // Changes needed
-	VoteReject        VoteResult = "REJECT"         // Fundamentally flawed
+	// VoteApprove represents approval decision
+	VoteApprove VoteResult = "APPROVE"
+	// VoteRequestChange represents request changes decision
+	VoteRequestChange VoteResult = "REQUEST_CHANGE"
+	// VoteReject represents reject decision
+	VoteReject VoteResult = "REJECT"
 )
