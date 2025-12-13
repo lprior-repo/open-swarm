@@ -265,18 +265,18 @@ func TestBootstrapCell_ServerBootFailure(t *testing.T) {
 	worktreeRemoved := false
 
 	portMgr := &mockPortManager{
-		releaseFunc: func(port int) error {
+		releaseFunc: func(_ int) error {
 			portReleased = true
 			return nil
 		},
 	}
 	serverMgr := &mockServerManager{
-		bootFunc: func(ctx context.Context, path, id string, port int) (*infra.ServerHandle, error) {
+		bootFunc: func(_ context.Context, _ string, _ string, _ int) (*infra.ServerHandle, error) {
 			return nil, errors.New("server boot failed")
 		},
 	}
 	worktreeMgr := &mockWorktreeManager{
-		removeFunc: func(id string) error {
+		removeFunc: func(_ string) error {
 			worktreeRemoved = true
 			return nil
 		},
@@ -303,19 +303,19 @@ func TestTeardownCell_Success(t *testing.T) {
 	portReleased := false
 
 	portMgr := &mockPortManager{
-		releaseFunc: func(port int) error {
+		releaseFunc: func(_ int) error {
 			portReleased = true
 			return nil
 		},
 	}
 	serverMgr := &mockServerManager{
-		shutdownFunc: func(handle *infra.ServerHandle) error {
+		shutdownFunc: func(_ *infra.ServerHandle) error {
 			serverShutdown = true
 			return nil
 		},
 	}
 	worktreeMgr := &mockWorktreeManager{
-		removeFunc: func(id string) error {
+		removeFunc: func(_ string) error {
 			worktreeRemoved = true
 			return nil
 		},
@@ -353,18 +353,18 @@ func TestTeardownCell_PartialFailure(t *testing.T) {
 	portReleased := false
 
 	portMgr := &mockPortManager{
-		releaseFunc: func(port int) error {
+		releaseFunc: func(_ int) error {
 			portReleased = true
 			return nil
 		},
 	}
 	serverMgr := &mockServerManager{
-		shutdownFunc: func(handle *infra.ServerHandle) error {
+		shutdownFunc: func(_ *infra.ServerHandle) error {
 			return errors.New("shutdown failed")
 		},
 	}
 	worktreeMgr := &mockWorktreeManager{
-		removeFunc: func(id string) error {
+		removeFunc: func(_ string) error {
 			worktreeRemoved = true
 			return nil
 		},
@@ -396,7 +396,7 @@ func TestTeardownCell_PartialFailure(t *testing.T) {
 // Tests for ExecuteTask
 func TestExecuteTask_Success(t *testing.T) {
 	client := &mockClient{
-		executePromptFunc: func(ctx context.Context, prompt string, opts *agent.PromptOptions) (*agent.PromptResult, error) {
+		executePromptFunc: func(_ context.Context, _ string, _ *agent.PromptOptions) (*agent.PromptResult, error) {
 			return &agent.PromptResult{
 				SessionID: "test-session",
 				Parts: []agent.ResultPart{
@@ -404,14 +404,14 @@ func TestExecuteTask_Success(t *testing.T) {
 				},
 			}, nil
 		},
-		getFileStatusFunc: func(ctx context.Context) ([]opencode.File, error) {
+		getFileStatusFunc: func(_ context.Context) ([]opencode.File, error) {
 			return []opencode.File{}, nil
 		},
 	}
 
 	portMgr := &mockPortManager{}
 	serverMgr := &mockServerManager{
-		healthyFunc: func(handle *infra.ServerHandle) bool {
+		healthyFunc: func(_ *infra.ServerHandle) bool {
 			return true
 		},
 	}
@@ -445,7 +445,7 @@ func TestExecuteTask_Success(t *testing.T) {
 func TestExecuteTask_UnhealthyServer(t *testing.T) {
 	portMgr := &mockPortManager{}
 	serverMgr := &mockServerManager{
-		healthyFunc: func(handle *infra.ServerHandle) bool {
+		healthyFunc: func(_ *infra.ServerHandle) bool {
 			return false
 		},
 	}
