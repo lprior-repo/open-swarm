@@ -5,18 +5,22 @@
 version: 2
 
 run:
-  timeout: 5m
+  timeout: 10m
   tests: true
   build-tags:
     - integration
   modules-download-mode: readonly
   allow-parallel-runners: true
 
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
 linters:
   enable:
     # Default linters
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
@@ -30,14 +34,12 @@ linters:
     - errname
     - errorlint
     - exhaustive
-    - exportloopref
+    - copyloopvar
     - gocheckcompilerdirectives
     - gocognit
     - goconst
     - gocritic
     - gocyclo
-    - gofmt
-    - goimports
     - mnd
     - goprintffuncname
     - gosec
@@ -50,45 +52,12 @@ linters:
     - prealloc
     - predeclared
     - revive
-    - stylecheck
     - thelper
     - tparallel
     - unconvert
     - unparam
     - whitespace
     - wrapcheck
-  disable:
-    - containedctx
-    - depguard
-    - exhaustruct
-    - forbidigo
-    - forcetypeassert
-    - funlen
-    - gci
-    - godot
-    - godox
-    - goerr113
-    - gofumpt
-    - goheader
-    - gomoddirectives
-    - gomodguard
-    - grouper
-    - importas
-    - interfacebloat
-    - ireturn
-    - lll
-    - maintidx
-    - makezero
-    - nestif
-    - nlreturn
-    - nonamedreturns
-    - paralleltest
-    - promlinter
-    - tagliatelle
-    - testableexamples
-    - testpackage
-    - varnamelen
-    - wsl
 
 linters-settings:
   cyclop:
@@ -138,10 +107,6 @@ linters-settings:
         sizeThreshold: 512
   gocyclo:
     min-complexity: 15
-  gofmt:
-    simplify: true
-  goimports:
-    local-prefixes: open-swarm
   mnd:
     ignored-functions:
       - 'time.*'
@@ -215,11 +180,6 @@ linters-settings:
       - name: redefines-builtin-id
   staticcheck:
     checks: ["all"]
-  stylecheck:
-    checks: ["all", "-ST1000", "-ST1003"]
-    dot-import-whitelist:
-      - fmt
-    http-status-code-whitelist: ["200", "400", "404", "500"]
   thelper:
     test:
       first: true
@@ -293,7 +253,6 @@ issues:
     - text: "should have a package comment"
       linters:
         - revive
-        - stylecheck
     - path: ".*\\.pb\\.go$"
       linters:
         - all
