@@ -473,7 +473,7 @@ func (ea *EnhancedActivities) GetCommitSHA(ctx context.Context, bootstrap *Boots
 
 	result, err := cell.Client.ExecuteCommand(ctx, "", "shell", []string{"git", "rev-parse", "HEAD"})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get commit SHA: %w", err)
 	}
 
 	sha := strings.TrimSpace(result.GetText())

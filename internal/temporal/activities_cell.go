@@ -7,6 +7,7 @@ package temporal
 
 import (
 	"context"
+	"fmt"
 
 	"go.temporal.io/sdk/activity"
 
@@ -72,7 +73,7 @@ func (ca *CellActivities) BootstrapCell(ctx context.Context, input BootstrapInpu
 	// Call existing infrastructure
 	cell, err := ca.activities.BootstrapCell(ctx, input.CellID, input.Branch)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to bootstrap cell %q: %w", input.CellID, err)
 	}
 
 	// Convert to serializable output
@@ -124,19 +125,29 @@ func (ca *CellActivities) RunTests(ctx context.Context, bootstrap *BootstrapOutp
 	logger.Info("Running tests", "cellID", bootstrap.CellID)
 
 	cell := ca.reconstructCell(bootstrap)
-	return ca.activities.RunTests(ctx, cell)
+	passed, err := ca.activities.RunTests(ctx, cell)
+	if err != nil {
+		return false, fmt.Errorf("failed to run tests in cell %q: %w", bootstrap.CellID, err)
+	}
+	return passed, nil
 }
 
 // CommitChanges commits work in the cell
 func (ca *CellActivities) CommitChanges(ctx context.Context, bootstrap *BootstrapOutput, message string) error {
 	cell := ca.reconstructCell(bootstrap)
-	return ca.activities.CommitChanges(ctx, cell, message)
+	if err := ca.activities.CommitChanges(ctx, cell, message); err != nil {
+		return fmt.Errorf("failed to commit changes in cell %q: %w", bootstrap.CellID, err)
+	}
+	return nil
 }
 
 // RevertChanges reverts work in the cell
 func (ca *CellActivities) RevertChanges(ctx context.Context, bootstrap *BootstrapOutput) error {
 	cell := ca.reconstructCell(bootstrap)
-	return ca.activities.RevertChanges(ctx, cell)
+	if err := ca.activities.RevertChanges(ctx, cell); err != nil {
+		return fmt.Errorf("failed to revert changes in cell %q: %w", bootstrap.CellID, err)
+	}
+	return nil
 }
 
 // TeardownCell destroys the cell and releases resources
@@ -145,7 +156,10 @@ func (ca *CellActivities) TeardownCell(ctx context.Context, bootstrap *Bootstrap
 	logger.Info("Tearing down cell", "cellID", bootstrap.CellID)
 
 	cell := ca.reconstructCell(bootstrap)
-	return ca.activities.TeardownCell(ctx, cell)
+	if err := ca.activities.TeardownCell(ctx, cell); err != nil {
+		return fmt.Errorf("failed to teardown cell %q: %w", bootstrap.CellID, err)
+	}
+	return nil
 }
 
 // reconstructCell rebuilds runtime cell from serialized bootstrap

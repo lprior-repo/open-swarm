@@ -122,7 +122,7 @@ func (c *Coordinator) RegisterAgent(name, program, model, taskDesc string) error
 			"name", name,
 			"error", err,
 			"project", c.projectKey)
-		return err
+		return fmt.Errorf("failed to register agent %q: %w", name, err)
 	}
 
 	slog.Info("Agent successfully registered via coordinator",

@@ -6,6 +6,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os/exec"
 
@@ -29,7 +30,7 @@ func SimpleAgentWorkflow(ctx workflow.Context, agentID int, command string) (str
 
 	if err != nil {
 		logger.Error("Agent failed", "agentID", agentID, "error", err)
-		return "", err
+		return "", fmt.Errorf("agent %d failed: %w", agentID, err)
 	}
 
 	logger.Info("Agent completed", "agentID", agentID)
@@ -41,7 +42,7 @@ func RunShellCommand(command string) (string, error) {
 	cmd := exec.Command("bash", "-c", command)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("command failed: %w", err)
 	}
 	return string(output), nil
 }

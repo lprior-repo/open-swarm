@@ -201,7 +201,7 @@ func (p *OutputParser) GetAllModifiedPaths(result *FileParseResult) []string {
 func (p *OutputParser) MatchPattern(filePath, pattern string) (bool, error) {
 	matched, err := filepath.Match(pattern, filePath)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to match pattern %q against %q: %w", pattern, filePath, err)
 	}
 	if matched {
 		return true, nil
@@ -211,7 +211,7 @@ func (p *OutputParser) MatchPattern(filePath, pattern string) (bool, error) {
 	basename := filepath.Base(filePath)
 	matched, err = filepath.Match(pattern, basename)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to match pattern %q against basename %q: %w", pattern, basename, err)
 	}
 
 	return matched, nil

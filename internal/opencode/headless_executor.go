@@ -167,7 +167,7 @@ func (e *HeadlessExecutor) getModelForProvider(provider string) string {
 func (e *HeadlessExecutor) getChangedFiles(ctx context.Context) ([]string, error) {
 	fileStatus, err := e.client.GetFileStatus(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get file status: %w", err)
 	}
 
 	filesChanged := make([]string, 0, len(fileStatus))

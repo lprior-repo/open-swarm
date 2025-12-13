@@ -190,7 +190,7 @@ func (a *Activities) RunTests(ctx context.Context, cell *CellBootstrap) (bool, e
 	// Execute test command via shell
 	result, err := cell.Client.ExecuteCommand(ctx, "", "shell", []string{"go", "test", "./..."})
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to execute tests: %w", err)
 	}
 
 	// Check if tests passed (very basic check)

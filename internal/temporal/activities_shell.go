@@ -7,6 +7,7 @@ package temporal
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/bitfield/script"
 	"go.temporal.io/sdk/activity"
@@ -31,7 +32,7 @@ func (sa *ShellActivities) RunScript(ctx context.Context, command string) (strin
 	output, err := p.String()
 	if err != nil {
 		logger.Error("Command failed", "error", err, "output", output)
-		return output, err
+		return output, fmt.Errorf("shell command failed: %w", err)
 	}
 
 	logger.Info("Command succeeded", "output", output)
@@ -52,7 +53,7 @@ func (sa *ShellActivities) RunScriptInDir(ctx context.Context, dir, command stri
 	output, err := p.String()
 	if err != nil {
 		logger.Error("Command failed", "error", err, "output", output)
-		return output, err
+		return output, fmt.Errorf("shell command failed: %w", err)
 	}
 
 	return output, nil

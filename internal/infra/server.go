@@ -132,13 +132,18 @@ func (sm *ServerManager) killProcess(cmd *exec.Cmd) error {
 	pgid, err := syscall.Getpgid(cmd.Process.Pid)
 	if err != nil {
 		// Fallback to killing just the main process
-		return cmd.Process.Kill()
+		if killErr := cmd.Process.Kill(); killErr != nil {
+			return fmt.Errorf("failed to kill process %d: %w", cmd.Process.Pid, killErr)
+		}
+		return nil
 	}
 
 	// Send SIGTERM to process group first for graceful shutdown
 	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
 		// If SIGTERM fails, use SIGKILL
-		return syscall.Kill(-pgid, syscall.SIGKILL)
+		if killErr := syscall.Kill(-pgid, syscall.SIGKILL); killErr != nil {
+			return fmt.Errorf("failed to kill process group %d: %w", pgid, killErr)
+		}
 	}
 
 	// Wait for process to exit (with timeout)

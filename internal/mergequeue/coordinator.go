@@ -114,7 +114,7 @@ func (c *Coordinator) Submit(ctx context.Context, change *ChangeRequest) error {
 	case c.changesChan <- change:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		return fmt.Errorf("failed to submit change: %w", ctx.Err())
 	case <-c.shutdownChan:
 		return fmt.Errorf("coordinator is shutting down")
 	}

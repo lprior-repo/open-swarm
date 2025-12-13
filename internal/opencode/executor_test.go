@@ -8,6 +8,7 @@ package opencode
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -25,26 +26,38 @@ type MockClient struct {
 
 func (m *MockClient) ExecutePrompt(ctx context.Context, prompt string, opts *agent.PromptOptions) (*agent.PromptResult, error) {
 	args := m.Called(ctx, prompt, opts)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	err := args.Error(1)
+	if err != nil {
+		err = fmt.Errorf("mock ExecutePrompt failed: %w", err)
 	}
-	return args.Get(0).(*agent.PromptResult), args.Error(1)
+	if args.Get(0) == nil {
+		return nil, err
+	}
+	return args.Get(0).(*agent.PromptResult), err
 }
 
 func (m *MockClient) ExecuteCommand(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
 	callArgs := m.Called(ctx, sessionID, command, args)
-	if callArgs.Get(0) == nil {
-		return nil, callArgs.Error(1)
+	err := callArgs.Error(1)
+	if err != nil {
+		err = fmt.Errorf("mock ExecuteCommand failed: %w", err)
 	}
-	return callArgs.Get(0).(*agent.PromptResult), callArgs.Error(1)
+	if callArgs.Get(0) == nil {
+		return nil, err
+	}
+	return callArgs.Get(0).(*agent.PromptResult), err
 }
 
 func (m *MockClient) GetFileStatus(ctx context.Context) ([]opencode.File, error) {
 	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	err := args.Error(1)
+	if err != nil {
+		err = fmt.Errorf("mock GetFileStatus failed: %w", err)
 	}
-	return args.Get(0).([]opencode.File), args.Error(1)
+	if args.Get(0) == nil {
+		return nil, err
+	}
+	return args.Get(0).([]opencode.File), err
 }
 
 func (m *MockClient) GetBaseURL() string {

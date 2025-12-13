@@ -12,7 +12,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"open-swarm/internal/agent"
@@ -183,12 +182,4 @@ func main() {
 	}
 
 	log.Println("\n✅ Reactor execution complete")
-}
-
-func absPath(path string) string {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return path
-	}
-	return abs
 }

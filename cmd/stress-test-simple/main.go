@@ -47,7 +47,7 @@ func SimpleAgentWorkflow(ctx workflow.Context, agentID int, command string) (str
 
 	if err != nil {
 		logger.Error("Agent failed", "agentID", agentID, "error", err)
-		return "", err
+		return "", fmt.Errorf("agent %d failed: %w", agentID, err)
 	}
 
 	logger.Info("Agent completed", "agentID", agentID)
