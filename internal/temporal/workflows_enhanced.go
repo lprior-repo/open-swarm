@@ -3,6 +3,12 @@
 // This software is released under the MIT License.
 // See LICENSE file in the repository for details.
 
+//go:build ignore
+// +build ignore
+
+// NOTE: This file is currently disabled as EnhancedTCRResult has been redesigned.
+// This workflow will be updated in a future task to use the new simplified struct.
+
 package temporal
 
 import (

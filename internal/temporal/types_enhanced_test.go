@@ -7,6 +7,7 @@ package temporal
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -55,27 +56,26 @@ func TestEnhancedTCRInput_Serialization(t *testing.T) {
 }
 
 func TestEnhancedTCRResult(t *testing.T) {
+	// This test is now replaced by more comprehensive tests below
+	// TestEnhancedTCRResult_Fields, TestEnhancedTCRResult_SuccessfulWorkflow, etc.
 	result := EnhancedTCRResult{
-		Success:       true,
-		WorkflowState: StateComplete,
-		Gates: map[string]GateResult{
-			"bootstrap": {
+		Success: true,
+		GateResults: []GateResult{
+			{
 				GateName: "bootstrap",
 				Passed:   true,
 				Duration: 5 * time.Second,
 			},
 		},
-		FinalCommitSHA: "abc123def456",
-		FilesChanged:   []string{"auth.go", "auth_test.go"},
-		TotalDuration:  2 * time.Minute,
-		RetryCount:     0,
+		FilesChanged: []string{"auth.go", "auth_test.go"},
+		Error:        "",
 	}
 
 	assert.True(t, result.Success)
-	assert.Equal(t, StateComplete, result.WorkflowState)
-	assert.Len(t, result.Gates, 1)
-	assert.Equal(t, "abc123def456", result.FinalCommitSHA)
+	assert.Len(t, result.GateResults, 1)
+	assert.Equal(t, "bootstrap", result.GateResults[0].GateName)
 	assert.Len(t, result.FilesChanged, 2)
+	assert.Empty(t, result.Error)
 }
 
 func TestWorkflowStates(t *testing.T) {
@@ -267,6 +267,232 @@ func TestVoteResults(t *testing.T) {
 	}
 }
 
+func TestEnhancedTCRResult_Fields(t *testing.T) {
+	// Test basic field assignment
+	result := EnhancedTCRResult{
+		Success: true,
+		GateResults: []GateResult{
+			{
+				GateName: "bootstrap",
+				Passed:   true,
+				Duration: 5 * time.Second,
+			},
+			{
+				GateName: "verify_green",
+				Passed:   true,
+				Duration: 30 * time.Second,
+			},
+		},
+		FilesChanged: []string{"auth.go", "auth_test.go", "utils.go"},
+		Error:        "",
+	}
+
+	assert.True(t, result.Success)
+	assert.Len(t, result.GateResults, 2)
+	assert.Equal(t, "bootstrap", result.GateResults[0].GateName)
+	assert.Equal(t, "verify_green", result.GateResults[1].GateName)
+	assert.Len(t, result.FilesChanged, 3)
+	assert.Equal(t, "auth.go", result.FilesChanged[0])
+	assert.Equal(t, "auth_test.go", result.FilesChanged[1])
+	assert.Equal(t, "utils.go", result.FilesChanged[2])
+	assert.Empty(t, result.Error)
+}
+
+func TestEnhancedTCRResult_EmptyArrays(t *testing.T) {
+	// Test with empty arrays
+	result := EnhancedTCRResult{
+		Success:      false,
+		GateResults:  []GateResult{},
+		FilesChanged: []string{},
+		Error:        "workflow initialization failed",
+	}
+
+	assert.False(t, result.Success)
+	assert.Empty(t, result.GateResults)
+	assert.Empty(t, result.FilesChanged)
+	assert.Equal(t, "workflow initialization failed", result.Error)
+}
+
+func TestEnhancedTCRResult_NilArrays(t *testing.T) {
+	// Test with nil arrays (should be allowed)
+	result := EnhancedTCRResult{
+		Success:      false,
+		GateResults:  nil,
+		FilesChanged: nil,
+		Error:        "bootstrap failed",
+	}
+
+	assert.False(t, result.Success)
+	assert.Nil(t, result.GateResults)
+	assert.Nil(t, result.FilesChanged)
+	assert.Equal(t, "bootstrap failed", result.Error)
+}
+
+func TestEnhancedTCRResult_FailureScenario(t *testing.T) {
+	// Test failure scenario with gate results showing where it failed
+	result := EnhancedTCRResult{
+		Success: false,
+		GateResults: []GateResult{
+			{
+				GateName: "bootstrap",
+				Passed:   true,
+				Duration: 3 * time.Second,
+			},
+			{
+				GateName: "gen_test",
+				Passed:   true,
+				Duration: 45 * time.Second,
+			},
+			{
+				GateName: "verify_red",
+				Passed:   false,
+				Duration: 10 * time.Second,
+				Error:    "test did not fail as expected",
+			},
+		},
+		FilesChanged: []string{"handler_test.go"},
+		Error:        "verify_red gate failed: test did not fail as expected",
+	}
+
+	assert.False(t, result.Success)
+	assert.Len(t, result.GateResults, 3)
+	assert.True(t, result.GateResults[0].Passed)
+	assert.True(t, result.GateResults[1].Passed)
+	assert.False(t, result.GateResults[2].Passed)
+	assert.Equal(t, "verify_red", result.GateResults[2].GateName)
+	assert.Contains(t, result.Error, "verify_red gate failed")
+}
+
+func TestEnhancedTCRResult_SuccessfulWorkflow(t *testing.T) {
+	// Test complete successful workflow with all gates
+	result := EnhancedTCRResult{
+		Success: true,
+		GateResults: []GateResult{
+			{GateName: "bootstrap", Passed: true, Duration: 2 * time.Second},
+			{GateName: "gen_test", Passed: true, Duration: 40 * time.Second},
+			{GateName: "lint_test", Passed: true, Duration: 5 * time.Second},
+			{GateName: "verify_red", Passed: true, Duration: 8 * time.Second},
+			{GateName: "gen_impl", Passed: true, Duration: 60 * time.Second},
+			{GateName: "verify_green", Passed: true, Duration: 10 * time.Second},
+		},
+		FilesChanged: []string{
+			"internal/api/handler.go",
+			"internal/api/handler_test.go",
+		},
+		Error: "",
+	}
+
+	assert.True(t, result.Success)
+	assert.Len(t, result.GateResults, 6)
+
+	// Verify all gates passed
+	for _, gate := range result.GateResults {
+		assert.True(t, gate.Passed, "gate %s should have passed", gate.GateName)
+	}
+
+	assert.Len(t, result.FilesChanged, 2)
+	assert.Empty(t, result.Error)
+}
+
+func TestEnhancedTCRResult_JSONSerialization(t *testing.T) {
+	// Test JSON marshaling and unmarshaling (required for Temporal)
+	original := EnhancedTCRResult{
+		Success: true,
+		GateResults: []GateResult{
+			{
+				GateName: "bootstrap",
+				Passed:   true,
+				Duration: 5 * time.Second,
+			},
+		},
+		FilesChanged: []string{"main.go", "main_test.go"},
+		Error:        "",
+	}
+
+	// Marshal to JSON
+	data, err := json.Marshal(original)
+	require.NoError(t, err)
+	assert.NotEmpty(t, data)
+
+	// Unmarshal back
+	var decoded EnhancedTCRResult
+	err = json.Unmarshal(data, &decoded)
+	require.NoError(t, err)
+
+	// Verify all fields match
+	assert.Equal(t, original.Success, decoded.Success)
+	assert.Len(t, decoded.GateResults, 1)
+	assert.Equal(t, original.GateResults[0].GateName, decoded.GateResults[0].GateName)
+	assert.Equal(t, original.GateResults[0].Passed, decoded.GateResults[0].Passed)
+	assert.Equal(t, original.FilesChanged, decoded.FilesChanged)
+	assert.Equal(t, original.Error, decoded.Error)
+}
+
+func TestEnhancedTCRResult_ArrayHandling(t *testing.T) {
+	t.Run("single gate result", func(t *testing.T) {
+		result := EnhancedTCRResult{
+			Success: true,
+			GateResults: []GateResult{
+				{GateName: "bootstrap", Passed: true},
+			},
+			FilesChanged: []string{"file.go"},
+			Error:        "",
+		}
+
+		assert.Len(t, result.GateResults, 1)
+		assert.Len(t, result.FilesChanged, 1)
+	})
+
+	t.Run("multiple gate results", func(t *testing.T) {
+		gateResults := make([]GateResult, 10)
+		for i := 0; i < 10; i++ {
+			gateResults[i] = GateResult{
+				GateName: fmt.Sprintf("gate_%d", i),
+				Passed:   true,
+			}
+		}
+
+		result := EnhancedTCRResult{
+			Success:      true,
+			GateResults:  gateResults,
+			FilesChanged: []string{"a.go", "b.go", "c.go"},
+			Error:        "",
+		}
+
+		assert.Len(t, result.GateResults, 10)
+		assert.Equal(t, "gate_0", result.GateResults[0].GateName)
+		assert.Equal(t, "gate_9", result.GateResults[9].GateName)
+	})
+
+	t.Run("many files changed", func(t *testing.T) {
+		files := make([]string, 20)
+		for i := 0; i < 20; i++ {
+			files[i] = fmt.Sprintf("file_%d.go", i)
+		}
+
+		result := EnhancedTCRResult{
+			Success:      true,
+			GateResults:  []GateResult{{GateName: "test", Passed: true}},
+			FilesChanged: files,
+			Error:        "",
+		}
+
+		assert.Len(t, result.FilesChanged, 20)
+		assert.Equal(t, "file_0.go", result.FilesChanged[0])
+		assert.Equal(t, "file_19.go", result.FilesChanged[19])
+	})
+}
+
+func TestEnhancedTCRResult_ZeroValue(t *testing.T) {
+	// Test zero value struct
+	var result EnhancedTCRResult
+
+	assert.False(t, result.Success)
+	assert.Nil(t, result.GateResults)
+	assert.Nil(t, result.FilesChanged)
+	assert.Empty(t, result.Error)
+}
+
 func TestUnanimousVoting(t *testing.T) {
 	t.Run("unanimous approval", func(t *testing.T) {
 		votes := []ReviewVote{
@@ -306,23 +532,19 @@ func TestUnanimousVoting(t *testing.T) {
 }
 
 func TestEnhancedTCRResult_Serialization(t *testing.T) {
+	// This test is now replaced by TestEnhancedTCRResult_JSONSerialization
+	// which tests the simplified struct format
 	result := EnhancedTCRResult{
-		Success:       true,
-		WorkflowState: StateComplete,
-		Gates: map[string]GateResult{
-			"verify_green": {
+		Success: true,
+		GateResults: []GateResult{
+			{
 				GateName: "verify_green",
 				Passed:   true,
 				Duration: 1 * time.Minute,
 			},
 		},
-		FinalCommitSHA: "abc123",
-		FilesChanged:   []string{"main.go"},
-		TotalDuration:  5 * time.Minute,
-		RetryCount:     1,
-		ReviewVotes: []ReviewVote{
-			{ReviewerName: "testing", ReviewType: ReviewTypeTesting, Vote: VoteApprove},
-		},
+		FilesChanged: []string{"main.go"},
+		Error:        "",
 	}
 
 	// Test JSON serialization (required for Temporal)
@@ -334,7 +556,8 @@ func TestEnhancedTCRResult_Serialization(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, result.Success, decoded.Success)
-	assert.Equal(t, result.WorkflowState, decoded.WorkflowState)
-	assert.Equal(t, result.FinalCommitSHA, decoded.FinalCommitSHA)
-	assert.Len(t, decoded.ReviewVotes, 1)
+	assert.Len(t, decoded.GateResults, 1)
+	assert.Equal(t, result.GateResults[0].GateName, decoded.GateResults[0].GateName)
+	assert.Equal(t, result.FilesChanged, decoded.FilesChanged)
+	assert.Equal(t, result.Error, decoded.Error)
 }

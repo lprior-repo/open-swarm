@@ -19,15 +19,10 @@ type EnhancedTCRInput struct {
 
 // EnhancedTCRResult contains the complete result of the Enhanced TCR workflow
 type EnhancedTCRResult struct {
-	Success        bool
-	WorkflowState  WorkflowState
-	Gates          map[string]GateResult // Map of gate name to result
-	FinalCommitSHA string                // Commit hash if successful
-	FilesChanged   []string
-	TotalDuration  time.Duration
-	Error          string
-	RetryCount     int
-	ReviewVotes    []ReviewVote
+	Success      bool
+	GateResults  []GateResult
+	FilesChanged []string
+	Error        string
 }
 
 // WorkflowState tracks the current state of the workflow
