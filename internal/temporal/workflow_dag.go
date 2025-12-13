@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gammazero/toposort"
+	"go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -156,7 +157,7 @@ func buildActivityOptions() workflow.ActivityOptions {
 }
 
 // executeDAG runs the main execution loop
-func executeDAG(ctx workflow.Context, logger workflow.Logger, state *dagState, tasks []Task) error {
+func executeDAG(ctx workflow.Context, logger log.Logger, state *dagState, tasks []Task) error {
 	shellActivities := &ShellActivities{}
 
 	for len(state.completed) < len(tasks) {
@@ -176,7 +177,7 @@ func executeDAG(ctx workflow.Context, logger workflow.Logger, state *dagState, t
 }
 
 // launchRunnableTasks launches all tasks whose dependencies are met
-func launchRunnableTasks(ctx workflow.Context, logger workflow.Logger, state *dagState, activities *ShellActivities) {
+func launchRunnableTasks(ctx workflow.Context, logger log.Logger, state *dagState, activities *ShellActivities) {
 	for _, taskName := range state.flatOrder {
 		if state.completed[taskName] || state.pendingFutures[taskName] != nil {
 			continue
@@ -202,7 +203,7 @@ func allDependenciesCompleted(state *dagState, taskName string) bool {
 }
 
 // waitForTaskCompletion waits for at least one task to complete
-func waitForTaskCompletion(ctx workflow.Context, logger workflow.Logger, state *dagState) error {
+func waitForTaskCompletion(ctx workflow.Context, logger log.Logger, state *dagState) error {
 	selector := workflow.NewSelector(ctx)
 
 	for name := range state.pendingFutures {
@@ -223,7 +224,7 @@ func waitForTaskCompletion(ctx workflow.Context, logger workflow.Logger, state *
 }
 
 // handleTaskResult processes the result of a completed task
-func handleTaskResult(logger workflow.Logger, state *dagState, taskName string, f workflow.Future, ctx workflow.Context) {
+func handleTaskResult(logger log.Logger, state *dagState, taskName string, f workflow.Future, ctx workflow.Context) {
 	var output string
 	err := f.Get(ctx, &output)
 
