@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sst/opencode-sdk-go"
 	"open-swarm/internal/agent"
 	"open-swarm/internal/infra"
 )
@@ -39,7 +40,7 @@ func main() {
 	defer shutdownServerDefer(serverMgr, serverHandle)
 
 	client := createClient(serverHandle, port)
-	result := executeTask(ctx, client)
+	_ = executeTask(ctx, client)
 	verifyResults(ctx, client)
 	performFinalHealthCheck(ctx, serverMgr, serverHandle)
 
@@ -188,19 +189,13 @@ func verifyResults(ctx context.Context, client *agent.Client) {
 	verifyFileContent(ctx, client, files)
 }
 
-func verifyFileContent(ctx context.Context, client *agent.Client, files []interface{}) {
+func verifyFileContent(ctx context.Context, client *agent.Client, files []opencode.File) {
 	if len(files) == 0 {
 		return
 	}
 
 	// Extract path from first file
-	var filePath string
-	if f, ok := files[0].(map[string]interface{}); ok {
-		if p, ok := f["Path"].(string); ok {
-			filePath = p
-		}
-	}
-
+	filePath := files[0].Path
 	if filePath == "" {
 		return
 	}

@@ -90,7 +90,7 @@ func (c *Client) getOrCreateSession(ctx context.Context, opts *PromptOptions) (s
 	return session.ID, nil
 }
 
-func (c *Client) sendPromptMessage(ctx context.Context, sessionID string, prompt string, opts *PromptOptions) (*opencode.SessionMessage, error) {
+func (c *Client) sendPromptMessage(ctx context.Context, sessionID string, prompt string, opts *PromptOptions) (*opencode.SessionPromptResponse, error) {
 	parts := []opencode.SessionPromptParamsPartUnion{
 		opencode.TextPartInputParam{
 			Type: opencode.F(opencode.TextPartInputTypeText),
@@ -127,7 +127,7 @@ func (c *Client) applyPromptOptions(promptParams *opencode.SessionPromptParams, 
 	}
 }
 
-func (c *Client) extractPromptResult(sessionID string, message *opencode.SessionMessage) *PromptResult {
+func (c *Client) extractPromptResult(sessionID string, message *opencode.SessionPromptResponse) *PromptResult {
 	result := &PromptResult{
 		SessionID: sessionID,
 		MessageID: message.Info.ID,

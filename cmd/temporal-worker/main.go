@@ -58,10 +58,12 @@ func main() {
 
 	// Register workflows
 	w.RegisterWorkflow(temporal.TCRWorkflow)
+	w.RegisterWorkflow(temporal.EnhancedTCRWorkflow)
 	w.RegisterWorkflow(temporal.TddDagWorkflow)
 
 	// Register activities
 	cellActivities := temporal.NewCellActivities()
+	enhancedActivities := temporal.NewEnhancedActivities()
 	shellActivities := &temporal.ShellActivities{}
 
 	w.RegisterActivity(cellActivities.BootstrapCell)
@@ -70,6 +72,14 @@ func main() {
 	w.RegisterActivity(cellActivities.CommitChanges)
 	w.RegisterActivity(cellActivities.RevertChanges)
 	w.RegisterActivity(cellActivities.TeardownCell)
+	w.RegisterActivity(enhancedActivities.AcquireFileLocks)
+	w.RegisterActivity(enhancedActivities.ReleaseFileLocks)
+	w.RegisterActivity(enhancedActivities.ExecuteGenTest)
+	w.RegisterActivity(enhancedActivities.ExecuteLintTest)
+	w.RegisterActivity(enhancedActivities.ExecuteVerifyRED)
+	w.RegisterActivity(enhancedActivities.ExecuteGenImpl)
+	w.RegisterActivity(enhancedActivities.ExecuteVerifyGREEN)
+	w.RegisterActivity(enhancedActivities.ExecuteMultiReview)
 	w.RegisterActivity(shellActivities.RunScript)
 	w.RegisterActivity(shellActivities.RunScriptInDir)
 

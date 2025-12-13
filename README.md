@@ -376,13 +376,22 @@ go build -ldflags="-s -w" -o bin/temporal-worker ./cmd/temporal-worker
 make fmt
 # Or: gofmt -w .
 
-# Lint (if golangci-lint installed)
-make lint
-# Or: golangci-lint run
+# Lint - Easy interface (recommended)
+./scripts/lint            # Run check (default)
+./scripts/lint fix        # Auto-fix issues
+./scripts/lint progress   # Show dashboard
+./scripts/lint autofix    # Smart auto-fix
+./scripts/lint --help     # See all options
 
-# All checks
+# Lint - Traditional targets
+make lint                 # Run check
+make lint-fix            # Auto-fix
+
+# All CI checks
 make ci
 ```
+
+See [docs/linting.md](docs/linting.md) for detailed linting documentation.
 
 ## Workflow Patterns
 

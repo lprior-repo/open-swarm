@@ -1,0 +1,9 @@
+# Infrastructure Modernization
+
+- Migrate from EC2 to Kubernetes [P0]
+- Setup monitoring with Prometheus/Grafana [P0]
+- Implement automated backups [P1]
+- Add disaster recovery procedures [P1]
+- Configure blue-green deployments [P2]
+- Setup multi-region failover [P2]
+- Implement cost optimization [P3]
