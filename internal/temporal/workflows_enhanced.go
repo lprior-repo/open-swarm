@@ -166,47 +166,8 @@ func EnhancedTCRWorkflow(ctx workflow.Context, input EnhancedTCRInput) (*Enhance
 		cellActivities: cellActivities,
 	}
 
-	// GATE 1: GenTest - Generate Tests
-	err = executor.executeGate("GenTest", enhancedActivities.ExecuteGenTest,
-		bootstrap, input.TaskID, input.AcceptanceCriteria)
-	if err != nil {
-		return result, nil
-	}
-
-	// GATE 2: LintTest - Lint Test Files
-	err = executor.executeGate("LintTest", enhancedActivities.ExecuteLintTest, bootstrap)
-	if err != nil {
-		return result, nil
-	}
-
-	// GATE 3: VerifyRED - Tests Must Fail
-	err = executor.executeGate("VerifyRED", enhancedActivities.ExecuteVerifyRED, bootstrap)
-	if err != nil {
-		return result, nil
-	}
-
-	// GATE 4: GenImpl - Generate Implementation
-	err = executor.executeGate("GenImpl", enhancedActivities.ExecuteGenImpl,
-		bootstrap, input.TaskID, input.Description, input.AcceptanceCriteria, "")
-	if err != nil {
-		return result, nil
-	}
-
-	// GATE 5: VerifyGREEN - Tests Must Pass
-	err = executor.executeGate("VerifyGREEN", enhancedActivities.ExecuteVerifyGREEN, bootstrap)
-	if err != nil {
-		return result, nil
-	}
-
-	// GATE 6: MultiReview - 3 Reviewers with Unanimous Approval
-	reviewersCount := input.ReviewersCount
-	if reviewersCount == 0 {
-		reviewersCount = 3 // Default: 3 reviewers
-	}
-
-	err = executor.executeGate("MultiReview", enhancedActivities.ExecuteMultiReview,
-		bootstrap, input.TaskID, input.Description, reviewersCount)
-	if err != nil {
+	// Execute all gates in sequence
+	if err := executeEnhancedTCRGates(executor, enhancedActivities, bootstrap, input); err != nil {
 		return result, nil
 	}
 
@@ -223,9 +184,46 @@ func EnhancedTCRWorkflow(ctx workflow.Context, input EnhancedTCRInput) (*Enhance
 
 	// Success!
 	result.Success = true
-
-	logger.Info("Enhanced TCR Workflow completed successfully",
-		"taskID", input.TaskID)
+	logger.Info("Enhanced TCR Workflow completed successfully", "taskID", input.TaskID)
 
 	return result, nil
+}
+
+// executeEnhancedTCRGates executes all 6 gates of the Enhanced TCR workflow in sequence
+func executeEnhancedTCRGates(executor *gateExecutor, enhancedActivities *EnhancedActivities, bootstrap *BootstrapOutput, input EnhancedTCRInput) error {
+	// GATE 1: GenTest - Generate Tests
+	if err := executor.executeGate("GenTest", enhancedActivities.ExecuteGenTest,
+		bootstrap, input.TaskID, input.AcceptanceCriteria); err != nil {
+		return err
+	}
+
+	// GATE 2: LintTest - Lint Test Files
+	if err := executor.executeGate("LintTest", enhancedActivities.ExecuteLintTest, bootstrap); err != nil {
+		return err
+	}
+
+	// GATE 3: VerifyRED - Tests Must Fail
+	if err := executor.executeGate("VerifyRED", enhancedActivities.ExecuteVerifyRED, bootstrap); err != nil {
+		return err
+	}
+
+	// GATE 4: GenImpl - Generate Implementation
+	if err := executor.executeGate("GenImpl", enhancedActivities.ExecuteGenImpl,
+		bootstrap, input.TaskID, input.Description, input.AcceptanceCriteria, ""); err != nil {
+		return err
+	}
+
+	// GATE 5: VerifyGREEN - Tests Must Pass
+	if err := executor.executeGate("VerifyGREEN", enhancedActivities.ExecuteVerifyGREEN, bootstrap); err != nil {
+		return err
+	}
+
+	// GATE 6: MultiReview - 3 Reviewers with Unanimous Approval
+	reviewersCount := input.ReviewersCount
+	if reviewersCount == 0 {
+		reviewersCount = 3 // Default: 3 reviewers
+	}
+
+	return executor.executeGate("MultiReview", enhancedActivities.ExecuteMultiReview,
+		bootstrap, input.TaskID, input.Description, reviewersCount)
 }
