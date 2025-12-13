@@ -27,6 +27,15 @@ func (e *LockError) Error() string {
 	return fmt.Sprintf("lock failed: %s (paths: %v, reason: %s)", e.Message, e.Paths, e.Reason)
 }
 
+// releaseLocks releases multiple locks as a rollback operation.
+// This helper eliminates duplicate rollback code across lock acquisition functions.
+// Errors are silently ignored since this is a best-effort cleanup during error handling.
+func releaseLocks(registry *filelock.MemoryRegistry, cellID string, paths []string) {
+	for _, path := range paths {
+		_ = registry.Release(path, cellID)
+	}
+}
+
 // ExecuteTaskWithLocksInput contains parameters for executing a task with lock management
 type ExecuteTaskWithLocksInput struct {
 	Bootstrap  *BootstrapOutput
@@ -137,9 +146,7 @@ func (ca *CellActivities) AcquireFileLocks(ctx context.Context, paths []string, 
 		result, err := lockRegistry.Acquire(req)
 		if err != nil {
 			// Rollback: release all acquired locks
-			for _, acquired := range acquiredPaths {
-				_ = lockRegistry.Release(acquired, cellID)
-			}
+			releaseLocks(lockRegistry, cellID, acquiredPaths)
 
 			logger.Error("Lock acquisition failed", "path", path, "error", err)
 			return &LockError{
@@ -151,9 +158,7 @@ func (ca *CellActivities) AcquireFileLocks(ctx context.Context, paths []string, 
 
 		if !result.Granted {
 			// Rollback: release all acquired locks
-			for _, acquired := range acquiredPaths {
-				_ = lockRegistry.Release(acquired, cellID)
-			}
+			releaseLocks(lockRegistry, cellID, acquiredPaths)
 
 			conflictInfo := fmt.Sprintf("conflicts with %d existing lock(s)", len(result.Conflicts))
 			logger.Error("Lock acquisition conflict", "path", path, "conflicts", result.Conflicts)

@@ -56,9 +56,7 @@ func (ea *EnhancedActivities) AcquireFileLocks(ctx context.Context, cellID strin
 		result, err := ea.lockRegistry.Acquire(req)
 		if err != nil || !result.Granted {
 			// Rollback: release already acquired locks
-			for _, locked := range lockedPatterns {
-				_ = ea.lockRegistry.Release(locked, cellID)
-			}
+			releaseLocks(ea.lockRegistry, cellID, lockedPatterns)
 			return nil, fmt.Errorf("failed to acquire lock on %s: %w", pattern, err)
 		}
 		lockedPatterns = append(lockedPatterns, pattern)
