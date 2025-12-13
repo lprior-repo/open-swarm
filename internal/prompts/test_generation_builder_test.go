@@ -399,3 +399,74 @@ func TestTestGenerationBuilder_WithCoverageReport(t *testing.T) {
 		t.Error("Should have 2 uncovered functions")
 	}
 }
+
+
+func TestTestGenerationPromptBuilder_ConditionalLintFeedback(t *testing.T) {
+	t.Run("WithLintFeedback", func(t *testing.T) {
+		request := &TestGenerationRequest{
+			Mode:            TestModeRefinement,
+			TaskDescription: "Fix test issues",
+			OutputPath:      "test.go",
+			Language:        "Go",
+			TestFramework:   "testing",
+			LintFeedback: &LintFeedback{
+				Summary: "Lint issues found",
+				Errors:  []string{"Error 1"},
+				Warnings: []string{"Warning 1"},
+			},
+		}
+
+		builder := NewTestGenerationPromptBuilder(request)
+		prompt := builder.Build()
+
+		if !strings.Contains(prompt, "## Lint Feedback") {
+			t.Error("Prompt should contain lint feedback section when LintFeedback is provided")
+		}
+		if !strings.Contains(prompt, "Error 1") {
+			t.Error("Prompt should contain lint error")
+		}
+		if !strings.Contains(prompt, "Warning 1") {
+			t.Error("Prompt should contain lint warning")
+		}
+	})
+
+	t.Run("WithoutLintFeedback", func(t *testing.T) {
+		request := &TestGenerationRequest{
+			Mode:            TestModeInitial,
+			TaskDescription: "Write new tests",
+			OutputPath:      "test.go",
+			Language:        "Go",
+			TestFramework:   "testing",
+			LintFeedback:    nil,
+		}
+
+		builder := NewTestGenerationPromptBuilder(request)
+		prompt := builder.Build()
+
+		if strings.Contains(prompt, "## Lint Feedback") {
+			t.Error("Prompt should NOT contain lint feedback section when LintFeedback is nil")
+		}
+	})
+
+	t.Run("WithEmptyLintFeedback", func(t *testing.T) {
+		request := &TestGenerationRequest{
+			Mode:            TestModeRefinement,
+			TaskDescription: "Fix test issues",
+			OutputPath:      "test.go",
+			Language:        "Go",
+			TestFramework:   "testing",
+			LintFeedback: &LintFeedback{
+				Summary:  "",
+				Errors:   []string{},
+				Warnings: []string{},
+			},
+		}
+
+		builder := NewTestGenerationPromptBuilder(request)
+		prompt := builder.Build()
+
+		if strings.Contains(prompt, "## Lint Feedback") {
+			t.Error("Prompt should NOT contain lint feedback section when LintFeedback has no errors or warnings")
+		}
+	})
+}
