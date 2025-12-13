@@ -8,6 +8,7 @@ package conflict
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"time"
 )
@@ -71,6 +72,12 @@ func NewAnalyzer(projectKey string) *Analyzer {
 
 // CheckConflict checks if a requested pattern conflicts with existing reservations
 func (a *Analyzer) CheckConflict(ctx context.Context, agentName string, pattern string, exclusive bool, reservations []Reservation) (*Conflict, error) {
+	slog.InfoContext(ctx, "Checking for conflicts",
+		"agent", agentName,
+		"pattern", pattern,
+		"exclusive", exclusive,
+		"total_reservations", len(reservations))
+
 	var holders []Holder
 
 	for _, res := range reservations {
@@ -81,8 +88,21 @@ func (a *Analyzer) CheckConflict(ctx context.Context, agentName string, pattern 
 
 		// Check if patterns overlap
 		if patternsOverlap(pattern, res.Pattern) {
+			slog.DebugContext(ctx, "Pattern overlap detected",
+				"requestor", agentName,
+				"holder", res.AgentName,
+				"requested_pattern", pattern,
+				"held_pattern", res.Pattern)
+
 			// Conflict if either is exclusive
 			if exclusive || res.Exclusive {
+				slog.WarnContext(ctx, "Exclusive conflict detected",
+					"requestor", agentName,
+					"holder", res.AgentName,
+					"requestor_exclusive", exclusive,
+					"holder_exclusive", res.Exclusive,
+					"expires_at", res.ExpiresAt)
+
 				holders = append(holders, Holder{
 					AgentName:     res.AgentName,
 					Pattern:       res.Pattern,
@@ -95,11 +115,20 @@ func (a *Analyzer) CheckConflict(ctx context.Context, agentName string, pattern 
 	}
 
 	if len(holders) == 0 {
+		slog.InfoContext(ctx, "No conflicts found",
+			"agent", agentName,
+			"pattern", pattern)
 		return nil, nil // No conflict
 	}
 
 	// Determine conflict type
 	conflictType := a.determineConflictType(exclusive, holders)
+
+	slog.ErrorContext(ctx, "CONFLICT DETECTED",
+		"requestor", agentName,
+		"requested_pattern", pattern,
+		"conflict_type", conflictType,
+		"num_conflicts", len(holders))
 
 	return &Conflict{
 		Requestor:        agentName,
@@ -115,6 +144,11 @@ func (a *Analyzer) SuggestResolution(conflict *Conflict) Resolution {
 		return ""
 	}
 
+	slog.Info("Analyzing conflict resolution options",
+		"requestor", conflict.Requestor,
+		"pattern", conflict.RequestedPattern,
+		"num_holders", len(conflict.Holders))
+
 	// Check if any reservations expire soon (within 5 minutes)
 	threshold := time.Now().Add(5 * time.Minute)
 	allExpiringSoon := true
@@ -126,24 +160,43 @@ func (a *Analyzer) SuggestResolution(conflict *Conflict) Resolution {
 	}
 
 	if allExpiringSoon {
+		slog.Info("Resolution: WAIT - all reservations expire soon",
+			"requestor", conflict.Requestor,
+			"strategy", "wait",
+			"reason", "all reservations expire within 5 minutes")
 		return ResolutionWait
 	}
 
 	// Check if reservation is stale (expired but not released)
 	now := time.Now()
 	hasStale := false
+	staleAgents := []string{}
 	for _, holder := range conflict.Holders {
 		if holder.ExpiresAt.Before(now) {
 			hasStale = true
-			break
+			staleAgents = append(staleAgents, holder.AgentName)
 		}
 	}
 
 	if hasStale {
+		slog.Warn("Resolution: FORCE RELEASE - stale reservations detected",
+			"requestor", conflict.Requestor,
+			"strategy", "force-release",
+			"stale_agents", staleAgents,
+			"reason", "reservations have expired but not released")
 		return ResolutionForceRelease
 	}
 
 	// Default: negotiate with holders
+	holderNames := make([]string, len(conflict.Holders))
+	for i, holder := range conflict.Holders {
+		holderNames[i] = holder.AgentName
+	}
+	slog.Info("Resolution: NEGOTIATE - contact holders via Agent Mail",
+		"requestor", conflict.Requestor,
+		"strategy", "negotiate",
+		"holders", holderNames,
+		"reason", "active reservations require coordination")
 	return ResolutionNegotiate
 }
 

@@ -7,6 +7,7 @@ package agent
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 )
 
@@ -41,11 +42,32 @@ func (m *Manager) Register(a Agent) error {
 	defer m.mu.Unlock()
 
 	if a.Name == "" {
+		slog.Error("Agent registration failed: name is required")
 		return fmt.Errorf("agent name is required")
+	}
+
+	// Check if agent already exists
+	if existing, exists := m.agents[a.Name]; exists {
+		slog.Info("Agent re-registration (updating existing agent)",
+			"name", a.Name,
+			"previous_task", existing.TaskDescription,
+			"new_task", a.TaskDescription,
+			"model", a.Model)
+	} else {
+		slog.Info("New agent registered",
+			"name", a.Name,
+			"program", a.Program,
+			"model", a.Model,
+			"task", a.TaskDescription,
+			"project", m.projectKey)
 	}
 
 	a.ProjectKey = m.projectKey
 	m.agents[a.Name] = a
+
+	slog.Info("Active agents in project",
+		"count", len(m.agents),
+		"project", m.projectKey)
 
 	return nil
 }
@@ -85,9 +107,19 @@ func (m *Manager) Remove(name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.agents[name]; !exists {
+	agent, exists := m.agents[name]
+	if !exists {
+		slog.Warn("Agent removal failed: agent not found",
+			"name", name,
+			"project", m.projectKey)
 		return fmt.Errorf("agent %s not found", name)
 	}
+
+	slog.Info("Agent removed from project",
+		"name", name,
+		"task", agent.TaskDescription,
+		"project", m.projectKey,
+		"remaining_agents", len(m.agents)-1)
 
 	delete(m.agents, name)
 	return nil
@@ -98,9 +130,20 @@ func (m *Manager) Update(a Agent) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.agents[a.Name]; !exists {
+	existing, exists := m.agents[a.Name]
+	if !exists {
+		slog.Warn("Agent update failed: agent not found",
+			"name", a.Name,
+			"project", m.projectKey)
 		return fmt.Errorf("agent %s not found", a.Name)
 	}
+
+	slog.Info("Agent updated",
+		"name", a.Name,
+		"previous_task", existing.TaskDescription,
+		"new_task", a.TaskDescription,
+		"last_active", a.LastActive,
+		"project", m.projectKey)
 
 	a.ProjectKey = m.projectKey
 	m.agents[a.Name] = a
