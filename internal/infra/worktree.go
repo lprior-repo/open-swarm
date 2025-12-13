@@ -47,8 +47,10 @@ func (wm *WorktreeManager) CreateWorktree(id string, branch string) (*WorktreeIn
 		return nil, fmt.Errorf("worktree %s already exists at %s", id, worktreePath)
 	}
 
-	// Create worktree: git worktree add <path> <branch>
-	cmd := exec.Command("git", "worktree", "add", worktreePath, branch)
+	// Create worktree with a NEW branch to avoid "already used" error
+	// Format: git worktree add -b <new-branch> <path> <base-branch>
+	newBranch := fmt.Sprintf("worktree-%s", id)
+	cmd := exec.Command("git", "worktree", "add", "-b", newBranch, worktreePath, branch)
 	cmd.Dir = wm.repoDir
 
 	output, err := cmd.CombinedOutput()
