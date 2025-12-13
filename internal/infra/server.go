@@ -57,6 +57,37 @@ func NewServerManager() *ServerManager {
 	}
 }
 
+// waitForHealth polls the health endpoint until ready or timeout.
+// Returns nil when server responds with 200 OK, error on timeout.
+func waitForHealth(ctx context.Context, baseURL string, timeout time.Duration, interval time.Duration) error {
+	healthCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	client := &http.Client{Timeout: healthCheckClientTimeout}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-healthCtx.Done():
+			return fmt.Errorf("health check timed out after %v", timeout)
+		case <-ticker.C:
+			req, err := http.NewRequestWithContext(healthCtx, "GET", baseURL+"/health", nil)
+			if err != nil {
+				continue
+			}
+			resp, err := client.Do(req)
+			if err != nil {
+				continue
+			}
+			resp.Body.Close()
+			if resp.StatusCode == httpStatusOK {
+				return nil
+			}
+		}
+	}
+}
+
 // BootServer starts an opencode server on the specified port and working directory
 // INV-002: Agent Server working directory must be set to the Git Worktree
 // INV-003: Supervisor must wait for Server Healthcheck (200 OK) before connecting SDK
@@ -89,49 +120,21 @@ func (sm *ServerManager) BootServer(ctx context.Context, worktreePath string, wo
 	pid := cmd.Process.Pid
 	baseURL := fmt.Sprintf("http://localhost:%d", port)
 
-	// 3. Healthcheck Loop (INV-003)
+	// 3. Healthcheck (INV-003)
 	// Wait for the server to become ready before returning
-	healthCtx, cancel := context.WithTimeout(ctx, sm.healthTimeout)
-	defer cancel()
-
-	ready := false
-	client := &http.Client{Timeout: healthCheckClientTimeout}
-	ticker := time.NewTicker(sm.healthInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-healthCtx.Done():
-			// Timeout - kill the server and return error
-			_ = sm.killProcess(cmd)
-			return nil, fmt.Errorf("opencode server on port %d failed to become ready within %v", port, sm.healthTimeout)
-
-		case <-ticker.C:
-			// Check health endpoint
-			req, err := http.NewRequestWithContext(healthCtx, "GET", baseURL+"/health", nil)
-			if err == nil {
-				resp, err := client.Do(req)
-				if err == nil {
-					resp.Body.Close()
-					if resp.StatusCode == httpStatusOK {
-						ready = true
-					}
-				}
-			}
-
-			if ready {
-				handle := &ServerHandle{
-					Port:       port,
-					WorktreeID: worktreeID,
-					WorkDir:    worktreePath,
-					Cmd:        cmd,
-					BaseURL:    baseURL,
-					PID:        pid,
-				}
-				return handle, nil
-			}
-		}
+	if err := waitForHealth(ctx, baseURL, sm.healthTimeout, sm.healthInterval); err != nil {
+		_ = sm.killProcess(cmd)
+		return nil, fmt.Errorf("opencode server on port %d failed to become ready: %w", port, err)
 	}
+
+	return &ServerHandle{
+		Port:       port,
+		WorktreeID: worktreeID,
+		WorkDir:    worktreePath,
+		Cmd:        cmd,
+		BaseURL:    baseURL,
+		PID:        pid,
+	}, nil
 }
 
 // Shutdown gracefully stops the opencode server
