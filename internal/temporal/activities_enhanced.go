@@ -199,17 +199,29 @@ func (ea *EnhancedActivities) ExecuteVerifyRED(ctx context.Context, bootstrap *B
 		output = result.GetText()
 	}
 
+	// Parse test output using TestParser
+	parser := NewTestParser()
+	parseResult := parser.ParseTestOutput(output)
+
 	// Tests should FAIL - if they pass, that's an error
-	testsFailed := strings.Contains(output, "FAIL")
+	testsFailed := parseResult.HasFailures
 	redPassed := testsFailed // RED means tests failed as expected
+
+	// Build debug info with parsed failure information
+	debugInfo := ""
+	if parseResult.HasFailures {
+		debugInfo = parser.GetFailureSummary(parseResult)
+	}
 
 	return &GateResult{
 		GateName: "verify_red",
 		Passed:   redPassed,
 		TestResult: &TestResult{
-			Passed:   !testsFailed, // Inverted: we want false here
-			Output:   output,
-			Duration: time.Since(startTime),
+			Passed:      !testsFailed, // Inverted: we want false here
+			Output:      output,
+			Duration:    time.Since(startTime),
+			TotalTests:  parseResult.TotalTests,
+			FailedTests: parseResult.FailedTests,
 		},
 		Duration: time.Since(startTime),
 		Error: func() string {
@@ -219,11 +231,25 @@ func (ea *EnhancedActivities) ExecuteVerifyRED(ctx context.Context, bootstrap *B
 				return ""
 			}
 		}(),
+		Message: debugInfo,
 	}, nil
 }
 
 // ExecuteGenImpl - Gate 4: Generate implementation
-func (ea *EnhancedActivities) ExecuteGenImpl(ctx context.Context, bootstrap *BootstrapOutput, taskID string, description string, acceptanceCriteria string) (*GateResult, error) {
+// testFailureOutput: Optional. If provided (non-empty), includes test failure feedback for retry attempts.
+//
+// When retrying after VerifyGREEN failures, the workflow should:
+//  1. Extract test output from verifyGreenResult.TestResult.Output
+//  2. Pass it as testFailureOutput parameter
+//  3. The agent will receive parsed, structured failure information
+//
+// Example retry workflow:
+//
+//	if !verifyGreenResult.Passed {
+//	  testOutput := verifyGreenResult.TestResult.Output
+//	  genImplResult, _ := ExecuteGenImpl(ctx, bootstrap, taskID, desc, criteria, testOutput)
+//	}
+func (ea *EnhancedActivities) ExecuteGenImpl(ctx context.Context, bootstrap *BootstrapOutput, taskID string, description string, acceptanceCriteria string, testFailureOutput string) (*GateResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Gate: GenImpl", "taskID", taskID)
 
@@ -231,7 +257,24 @@ func (ea *EnhancedActivities) ExecuteGenImpl(ctx context.Context, bootstrap *Boo
 	cellActivities := NewCellActivities()
 	cell := cellActivities.reconstructCell(bootstrap)
 
-	prompt := fmt.Sprintf(`Implement the solution for task: %s
+	// Build base prompt
+	var promptBuilder strings.Builder
+
+	// If retry feedback is provided, include parsed test failures
+	if testFailureOutput != "" {
+		parser := NewTestParser()
+		parseResult := parser.ParseTestOutput(testFailureOutput)
+
+		if parseResult.HasFailures {
+			failureSummary := parser.GetFailureSummary(parseResult)
+			promptBuilder.WriteString("Previous implementation attempt failed with test failures:\n\n")
+			promptBuilder.WriteString(failureSummary)
+			promptBuilder.WriteString("\n\nPlease fix the implementation to address these failures.\n\n")
+			logger.Info("GenImpl retry with test failure feedback", "failures", len(parseResult.Failures))
+		}
+	}
+
+	promptBuilder.WriteString(fmt.Sprintf(`Implement the solution for task: %s
 
 Description: %s
 
@@ -242,7 +285,9 @@ Requirements:
 - Implement code to make all tests pass
 - Follow Go best practices and idioms
 - Include proper error handling
-- Add documentation comments`, taskID, description, acceptanceCriteria)
+- Add documentation comments`, taskID, description, acceptanceCriteria))
+
+	prompt := promptBuilder.String()
 
 	result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 		Title: fmt.Sprintf("GenImpl: %s", taskID),
@@ -301,19 +346,37 @@ func (ea *EnhancedActivities) ExecuteVerifyGREEN(ctx context.Context, bootstrap 
 		output = result.GetText()
 	}
 
-	testsPassed := err == nil && !strings.Contains(output, "FAIL")
+	// Parse test output using TestParser
+	parser := NewTestParser()
+	parseResult := parser.ParseTestOutput(output)
+
+	// GREEN means all tests pass - no failures allowed
+	testsPassed := err == nil && !parseResult.HasFailures
+
+	// Extract failed test names for detailed reporting
+	failedTestNames := make([]string, 0, len(parseResult.Failures))
+	for _, failure := range parseResult.Failures {
+		failedTestNames = append(failedTestNames, failure.TestName)
+	}
 
 	return &GateResult{
 		GateName: "verify_green",
 		Passed:   testsPassed,
 		TestResult: &TestResult{
-			Passed:   testsPassed,
-			Output:   output,
-			Duration: time.Since(startTime),
+			Passed:       testsPassed,
+			TotalTests:   parseResult.TotalTests,
+			PassedTests:  parseResult.PassedTests,
+			FailedTests:  parseResult.FailedTests,
+			Output:       output,
+			Duration:     time.Since(startTime),
+			FailureTests: failedTestNames,
 		},
 		Duration: time.Since(startTime),
 		Error: func() string {
 			if !testsPassed {
+				if len(parseResult.Failures) > 0 {
+					return fmt.Sprintf("tests failed (not GREEN): %d failure(s) detected", len(parseResult.Failures))
+				}
 				return "tests failed (not GREEN)"
 			} else {
 				return ""

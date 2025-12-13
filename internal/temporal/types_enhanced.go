@@ -48,6 +48,7 @@ type GateResult struct {
 	AgentResults  []AgentResult
 	Duration      time.Duration
 	Error         string
+	Message       string // Optional informational message
 	RetryAttempts int
 	TestResult    *TestResult  // For test gates
 	LintResult    *LintResult  // For lint gates
