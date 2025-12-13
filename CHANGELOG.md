@@ -19,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Serializable input/output types for all activities enabling Temporal's persistence layer
 
 - **Workflow Orchestration**: Two complementary workflow patterns for different execution scenarios
-  - **DAG Workflow** (`workflows_dag.go`): Directed Acyclic Graph execution with:
+  - **DAG Workflow** (`workflow_dag.go`): Directed Acyclic Graph execution with:
     - Toposort-based dependency resolution for parallel-safe task ordering
     - Parallel task execution using Temporal selectors
     - Test-Driven Development (TDD) integration with per-task test cycles
@@ -79,7 +79,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   ├── globals.go              # Singleton pattern for non-serializable managers
   ├── activities_cell.go      # Cell lifecycle activities
   ├── activities_shell.go     # Shell command activities
-  ├── workflows_dag.go        # DAG workflow orchestration
+  ├── workflow_dag.go         # DAG workflow orchestration
   └── workflows_tcr.go        # Test-Commit-Revert workflow
   ```
 
@@ -111,7 +111,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Tasks closed: open-swarm-ud9.3, open-swarm-ud9.4, open-swarm-ud9
 
 #### Phase 4: Workflow Layer (Dec 12, 13:07) - CRITICAL PATH
-- Implemented workflows_dag.go with toposort-based dependency resolution
+- Implemented workflow_dag.go with toposort-based dependency resolution
 - Created workflows_tcr.go with Test-Commit-Revert pattern and saga cleanup
 - Integrated parallel task execution with Temporal selectors
 - Tasks closed: open-swarm-fb3.3, open-swarm-fb3.4, open-swarm-fb3

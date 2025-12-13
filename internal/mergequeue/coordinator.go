@@ -41,6 +41,9 @@ type Coordinator struct {
 	// Metrics
 	stats QueueStats
 
+	// Docker container manager
+	dockerManager *DockerManager
+
 	// Channels for coordination
 	changesChan  chan *ChangeRequest
 	resultsChan  chan *TestResult
@@ -97,11 +100,20 @@ func NewCoordinator(config CoordinatorConfig) *Coordinator {
 		config.TestTimeout = 5 * time.Minute
 	}
 
+	// Initialize Docker manager (log error but don't fail)
+	dockerManager, err := NewDockerManager()
+	if err != nil {
+		// Log warning: Docker functionality will be limited
+		// This allows the coordinator to still function without Docker
+		dockerManager = nil
+	}
+
 	return &Coordinator{
 		mainQueue:      make([]*ChangeRequest, 0),
 		bypassLane:     make([]*ChangeRequest, 0),
 		activeBranches: make(map[string]*SpeculativeBranch),
 		config:         config,
+		dockerManager:  dockerManager,
 		changesChan:    make(chan *ChangeRequest, defaultChannelCapacity),
 		resultsChan:    make(chan *TestResult, defaultChannelCapacity),
 		shutdownChan:   make(chan struct{}),
@@ -117,10 +129,23 @@ func (c *Coordinator) Start(ctx context.Context) error {
 
 // Stop gracefully shuts down the coordinator
 func (c *Coordinator) Stop() error {
+	var err error
 	c.shutdownOnce.Do(func() {
 		close(c.shutdownChan)
+
+		// Close Docker manager if it exists
+		if c.dockerManager != nil {
+			_ = c.dockerManager.Close()
+		}
+
+		// Close Docker manager if it exists
+		if c.dockerManager != nil {
+			if closeErr := c.dockerManager.Close(); closeErr != nil {
+				err = fmt.Errorf("failed to close docker manager: %w", closeErr)
+			}
+		}
 	})
-	return nil
+	return err
 }
 
 // Submit adds a change request to the queue
@@ -233,19 +258,15 @@ func (c *Coordinator) calculateDepth() int {
 }
 
 // createSpeculativeBranches spawns parallel tests for batch
-func (c *Coordinator) createSpeculativeBranches(_ context.Context, batch []*ChangeRequest) {
-	// TODO: Implement speculative branch creation
-	// 1. Create base test (change[0])
-	// 2. Create speculative tests (change[0]+change[1], change[0]+change[1]+change[2], etc)
-	// 3. Run all tests in parallel
+func (c *Coordinator) createSpeculativeBranches(ctx context.Context, batch []*ChangeRequest) {
+	// Delegate to implementation in speculative_execution.go
+	c.createSpeculativeBranchesImpl(ctx, batch)
 }
 
 // processBypass handles independent changes in bypass lane
-func (c *Coordinator) processBypass(_ context.Context, change *ChangeRequest) {
-	// TODO: Implement bypass lane processing
-	// 1. Test change in isolation
-	// 2. If pass -> merge directly to main
-	// 3. If fail -> revert and move to manual review
+func (c *Coordinator) processBypass(ctx context.Context, change *ChangeRequest) {
+	// Delegate to implementation in speculative_execution.go
+	c.processBypassImpl(ctx, change)
 }
 
 // handleResults processes test results and makes merge decisions
@@ -314,8 +335,19 @@ func (c *Coordinator) processTestResult(ctx context.Context, result *TestResult)
 }
 
 // updateStats updates queue performance metrics
-func (c *Coordinator) updateStats(_ *TestResult) {
-	// TODO: Implement metrics tracking
+func (c *Coordinator) updateStats(result *TestResult) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Track test failures
+	if !result.Passed {
+		c.stats.TotalFailures++
+	}
+
+	// Check if this was a timeout (duration exceeds or equals test timeout)
+	if result.Duration >= c.config.TestTimeout {
+		c.stats.TotalTimeouts++
+	}
 }
 
 // GetStats returns current queue statistics
@@ -326,7 +358,7 @@ func (c *Coordinator) GetStats() QueueStats {
 }
 
 // killFailedBranch kills a single speculative branch and cleans up its resources
-func (c *Coordinator) killFailedBranch(_ context.Context, branchID string, reason string) error {
+func (c *Coordinator) killFailedBranch(ctx context.Context, branchID string, reason string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -340,15 +372,35 @@ func (c *Coordinator) killFailedBranch(_ context.Context, branchID string, reaso
 		return nil
 	}
 
+	// Stop and remove Docker container if it exists
+	if c.dockerManager != nil && branch.ContainerID != "" {
+		// Create a background context for cleanup (don't use the potentially cancelled ctx)
+		cleanupCtx := context.Background()
+		if err := c.dockerManager.StopAndRemoveContainer(cleanupCtx, branch.ContainerID); err != nil {
+			// Log error but continue with other cleanup
+			// In production, this should use proper logging
+			_ = err
+		}
+	}
+
 	// TODO: Cancel Temporal workflow
-	// TODO: Stop Docker container
-	// TODO: Clean up worktree
+
+	// Clean up worktrees for this branch
+	_ = c.cleanupBranchWorktrees(context.Background(), branch)
 
 	// Update branch status
 	now := time.Now()
 	branch.Status = BranchStatusKilled
 	branch.KilledAt = &now
 	branch.KillReason = reason
+
+	// Track kill switch activation
+	c.stats.TotalKills++
+
+	// Send notification to affected agents (unlock before notification to avoid deadlock)
+	c.mu.Unlock()
+	_ = c.notifyBranchKilled(ctx, branch, reason)
+	c.mu.Lock()
 
 	return nil
 }

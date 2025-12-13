@@ -51,7 +51,7 @@ The README is **misleading** about what this project is:
 
 ### Retry Policies: CONSERVATIVE
 
-From `internal/temporal/workflows_dag.go` and `workflows_tcr.go`:
+From `internal/temporal/workflow_dag.go` and `workflows_tcr.go`:
 
 ```go
 // DAG workflow: Modest retries
@@ -70,7 +70,7 @@ RetryPolicy: &temporal.RetryPolicy{
 
 ### TDD Workflow: WAITS FOR HUMAN INTERVENTION
 
-From `internal/temporal/workflows_dag.go:50-59`:
+From `internal/temporal/workflow_dag.go:50-59`:
 
 ```go
 // 2. Failure Handling - Wait for human intervention
@@ -211,7 +211,7 @@ time=2025-12-13T02:52:20.107Z level=INFO msg="Resolution: NEGOTIATE - contact ho
 **Location:** `internal/temporal/`
 
 - `workflows_tcr.go` - Test-Commit-Revert pattern (fully implemented)
-- `workflows_dag.go` - DAG execution with dependencies
+- `workflow_dag.go` - DAG execution with dependencies
 - `workflows_enhanced.go` - Enhanced TCR with validation
 - `activities_cell.go` - Cell lifecycle management
 - `activities_shell.go` - Shell command execution

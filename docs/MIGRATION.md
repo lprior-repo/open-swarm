@@ -752,7 +752,7 @@ All activities in v6.1.0 follow the serializable pattern.
 
 ### Toposort-Based DAG Resolution
 
-Location: `internal/temporal/workflows_dag.go`
+Location: `internal/temporal/workflow_dag.go`
 
 DAG workflows resolve task dependencies using topological sorting:
 

@@ -95,7 +95,7 @@ Result: Success
 ```
 
 #### TDD DAG Workflow (Test-Driven Development)
-Located in `/home/lewis/src/open-swarm/internal/temporal/workflows_dag.go`
+Located in `/home/lewis/src/open-swarm/internal/temporal/workflow_dag.go`
 
 More complex workflow with:
 - Multiple parallel activities

@@ -14,7 +14,7 @@
 
 ### 1.1 Workflow Types
 
-#### **DAG Workflow** (`internal/temporal/workflows_dag.go`)
+#### **DAG Workflow** (`internal/temporal/workflow_dag.go`)
 - **Purpose**: Execute tasks in dependency order with parallelism
 - **Pattern**: Test-Driven Development loop with retry on failure
 - **Key Features**:
@@ -432,7 +432,7 @@ TestTaskStructure()                    // Task struct validation
 - `internal/infra/ports_test.go`: Port manager tests
 - `internal/workflow/activities_test.go`: Activity tests
 - `internal/temporal/activities_test.go`: Cell activity tests
-- `internal/temporal/workflows_dag_test.go`: DAG workflow tests
+- `internal/temporal/workflow_dag_test.go`: DAG workflow tests
 - `internal/temporal/workflows_tcr_test.go`: TCR workflow tests
 
 ### 5.3 Configuration Tests (`internal/config/config_test.go`)
@@ -612,7 +612,7 @@ defer func() {
 
 | File | Purpose | Key Types |
 |------|---------|-----------|
-| `internal/temporal/workflows_dag.go` | DAG workflow | `TddDagWorkflow`, `Task`, `DAGWorkflowInput` |
+| `internal/temporal/workflow_dag.go` | DAG workflow | `TddDagWorkflow`, `Task`, `DAGWorkflowInput` |
 | `internal/temporal/workflows_tcr.go` | TCR workflow | `TCRWorkflow`, `TCRWorkflowInput`, `TCRWorkflowResult` |
 | `internal/temporal/activities_cell.go` | Cell activities | `CellActivities`, `BootstrapOutput`, `TaskOutput` |
 | `internal/temporal/activities_shell.go` | Shell activities | `ShellActivities` |

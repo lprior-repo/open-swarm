@@ -276,7 +276,7 @@ User/CLI Input
 
 #### 2. TDD DAG Workflow (Directed Acyclic Graph)
 
-**File:** `internal/temporal/workflows_dag.go`
+**File:** `internal/temporal/workflow_dag.go`
 
 **Purpose:** Multi-task orchestration with dependency resolution
 
@@ -798,7 +798,7 @@ open-swarm/
 │   │
 │   ├── temporal/                 # Temporal workflows
 │   │   ├── workflows_tcr.go     # Test-Commit-Revert workflow
-│   │   ├── workflows_dag.go     # TDD DAG workflow
+│   │   ├── workflow_dag.go      # TDD DAG workflow
 │   │   ├── activities_cell.go   # Cell lifecycle activities
 │   │   ├── activities_shell.go  # Shell command activities
 │   │   ├── globals.go           # Singleton managers

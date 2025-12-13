@@ -221,7 +221,7 @@ RetryPolicy: &temporal.RetryPolicy{
 
 ### DAG Workflow Configuration
 
-**Location:** `/home/lewis/src/open-swarm/internal/temporal/workflows_dag.go` lines 103-108
+**Location:** `/home/lewis/src/open-swarm/internal/temporal/workflow_dag.go` lines 103-108
 
 ```go
 RetryPolicy: &temporal.RetryPolicy{
