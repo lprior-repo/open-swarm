@@ -63,21 +63,34 @@ func (c *Client) ExecutePrompt(ctx context.Context, prompt string, opts *PromptO
 		opts = &PromptOptions{}
 	}
 
-	// 1. Create or get session
-	var sessionID string
-	if opts.SessionID != "" {
-		sessionID = opts.SessionID
-	} else {
-		session, err := c.sdk.Session.New(ctx, opencode.SessionNewParams{
-			Title: opencode.F(opts.Title),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create session: %w", err)
-		}
-		sessionID = session.ID
+	sessionID, err := c.getOrCreateSession(ctx, opts)
+	if err != nil {
+		return nil, err
 	}
 
-	// 2. Send prompt as message
+	message, err := c.sendPromptMessage(ctx, sessionID, prompt, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.extractPromptResult(sessionID, message), nil
+}
+
+func (c *Client) getOrCreateSession(ctx context.Context, opts *PromptOptions) (string, error) {
+	if opts.SessionID != "" {
+		return opts.SessionID, nil
+	}
+
+	session, err := c.sdk.Session.New(ctx, opencode.SessionNewParams{
+		Title: opencode.F(opts.Title),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create session: %w", err)
+	}
+	return session.ID, nil
+}
+
+func (c *Client) sendPromptMessage(ctx context.Context, sessionID string, prompt string, opts *PromptOptions) (*opencode.SessionMessage, error) {
 	parts := []opencode.SessionPromptParamsPartUnion{
 		opencode.TextPartInputParam{
 			Type: opencode.F(opencode.TextPartInputTypeText),
@@ -89,29 +102,32 @@ func (c *Client) ExecutePrompt(ctx context.Context, prompt string, opts *PromptO
 		Parts: opencode.F(parts),
 	}
 
-	// Set model if specified
+	c.applyPromptOptions(&promptParams, opts)
+
+	message, err := c.sdk.Session.Prompt(ctx, sessionID, promptParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send prompt: %w", err)
+	}
+	return message, nil
+}
+
+func (c *Client) applyPromptOptions(promptParams *opencode.SessionPromptParams, opts *PromptOptions) {
 	if opts.Model != "" {
 		promptParams.Model = opencode.F(opencode.SessionPromptParamsModel{
 			ModelID: opencode.F(opts.Model),
 		})
 	}
 
-	// Set agent if specified
 	if opts.Agent != "" {
 		promptParams.Agent = opencode.F(opts.Agent)
 	}
 
-	// Set noReply if specified (for context injection without AI response)
 	if opts.NoReply {
 		promptParams.NoReply = opencode.F(true)
 	}
+}
 
-	message, err := c.sdk.Session.Prompt(ctx, sessionID, promptParams)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send prompt: %w", err)
-	}
-
-	// 3. Extract response
+func (c *Client) extractPromptResult(sessionID string, message *opencode.SessionMessage) *PromptResult {
 	result := &PromptResult{
 		SessionID: sessionID,
 		MessageID: message.Info.ID,
@@ -128,30 +144,14 @@ func (c *Client) ExecutePrompt(ctx context.Context, prompt string, opts *PromptO
 			resultPart.Text = part.Text
 		case opencode.PartTypeTool:
 			resultPart.ToolName = part.Tool
-			// Tool result would need additional handling if available
 		case opencode.PartTypeReasoning:
-			// Reasoning part - store as text for now
 			resultPart.Text = part.Text
-		case opencode.PartTypeFile:
-			// File part handling
-		case opencode.PartTypeStepStart:
-			// Step start marker
-		case opencode.PartTypeStepFinish:
-			// Step finish marker
-		case opencode.PartTypeSnapshot:
-			// Snapshot part
-		case opencode.PartTypePatch:
-			// Patch part
-		case opencode.PartTypeAgent:
-			// Agent part
-		case opencode.PartTypeRetry:
-			// Retry part
 		}
 
 		result.Parts = append(result.Parts, resultPart)
 	}
 
-	return result, nil
+	return result
 }
 
 // ExecuteCommand executes a command (slash command) on the OpenCode server
