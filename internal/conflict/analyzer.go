@@ -1,0 +1,231 @@
+// Copyright (c) 2025 Open Swarm Contributors
+//
+// This software is released under the MIT License.
+// See LICENSE file in the repository for details.
+
+package conflict
+
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+	"time"
+)
+
+// Reservation represents a file reservation from Agent Mail
+type Reservation struct {
+	ID        int
+	AgentName string
+	Pattern   string
+	Exclusive bool
+	ExpiresAt time.Time
+}
+
+// Conflict represents a detected conflict between reservations
+type Conflict struct {
+	Requestor        string
+	RequestedPattern string
+	Holders          []Holder
+	ConflictType     ConflictType
+}
+
+// Holder represents an agent holding a conflicting reservation
+type Holder struct {
+	AgentName     string
+	Pattern       string
+	Exclusive     bool
+	ExpiresAt     time.Time
+	ReservationID int
+}
+
+// ConflictType categorizes the type of conflict
+type ConflictType string
+
+const (
+	ConflictTypeExclusiveExclusive ConflictType = "exclusive-exclusive" // Both want exclusive access
+	ConflictTypeExclusiveShared    ConflictType = "exclusive-shared"    // Exclusive vs shared
+	ConflictTypeExpiring           ConflictType = "expiring"            // Conflict but reservation expiring soon
+)
+
+// Resolution suggests how to resolve a conflict
+type Resolution string
+
+const (
+	ResolutionWait          Resolution = "wait"           // Wait for reservation to expire
+	ResolutionNegotiate     Resolution = "negotiate"      // Contact holder to negotiate
+	ResolutionForceRelease  Resolution = "force-release"  // Force release stale reservation
+	ResolutionChangePattern Resolution = "change-pattern" // Use different file pattern
+)
+
+// Analyzer detects conflicts in file reservations
+type Analyzer struct {
+	projectKey string
+}
+
+// NewAnalyzer creates a new conflict analyzer
+func NewAnalyzer(projectKey string) *Analyzer {
+	return &Analyzer{
+		projectKey: projectKey,
+	}
+}
+
+// CheckConflict checks if a requested pattern conflicts with existing reservations
+func (a *Analyzer) CheckConflict(ctx context.Context, agentName string, pattern string, exclusive bool, reservations []Reservation) (*Conflict, error) {
+	var holders []Holder
+
+	for _, res := range reservations {
+		// Skip own reservations
+		if res.AgentName == agentName {
+			continue
+		}
+
+		// Check if patterns overlap
+		if patternsOverlap(pattern, res.Pattern) {
+			// Conflict if either is exclusive
+			if exclusive || res.Exclusive {
+				holders = append(holders, Holder{
+					AgentName:     res.AgentName,
+					Pattern:       res.Pattern,
+					Exclusive:     res.Exclusive,
+					ExpiresAt:     res.ExpiresAt,
+					ReservationID: res.ID,
+				})
+			}
+		}
+	}
+
+	if len(holders) == 0 {
+		return nil, nil // No conflict
+	}
+
+	// Determine conflict type
+	conflictType := a.determineConflictType(exclusive, holders)
+
+	return &Conflict{
+		Requestor:        agentName,
+		RequestedPattern: pattern,
+		Holders:          holders,
+		ConflictType:     conflictType,
+	}, nil
+}
+
+// SuggestResolution suggests the best resolution strategy
+func (a *Analyzer) SuggestResolution(conflict *Conflict) Resolution {
+	if conflict == nil {
+		return ""
+	}
+
+	// Check if any reservations expire soon (within 5 minutes)
+	threshold := time.Now().Add(5 * time.Minute)
+	allExpiringSoon := true
+	for _, holder := range conflict.Holders {
+		if holder.ExpiresAt.After(threshold) {
+			allExpiringSoon = false
+			break
+		}
+	}
+
+	if allExpiringSoon {
+		return ResolutionWait
+	}
+
+	// Check if reservation is stale (expired but not released)
+	now := time.Now()
+	hasStale := false
+	for _, holder := range conflict.Holders {
+		if holder.ExpiresAt.Before(now) {
+			hasStale = true
+			break
+		}
+	}
+
+	if hasStale {
+		return ResolutionForceRelease
+	}
+
+	// Default: negotiate with holders
+	return ResolutionNegotiate
+}
+
+// FormatConflictReport generates a human-readable conflict report
+func (a *Analyzer) FormatConflictReport(conflict *Conflict, resolution Resolution) string {
+	if conflict == nil {
+		return "No conflicts detected"
+	}
+
+	report := fmt.Sprintf("❌ CONFLICT DETECTED\n\n")
+	report += fmt.Sprintf("Requestor: %s\n", conflict.Requestor)
+	report += fmt.Sprintf("Requested pattern: %s\n", conflict.RequestedPattern)
+	report += fmt.Sprintf("Conflict type: %s\n", conflict.ConflictType)
+	report += fmt.Sprintf("\nConflicting reservations (%d):\n", len(conflict.Holders))
+
+	for i, holder := range conflict.Holders {
+		expiresIn := time.Until(holder.ExpiresAt)
+		report += fmt.Sprintf("\n  %d. Agent: %s\n", i+1, holder.AgentName)
+		report += fmt.Sprintf("     Pattern: %s\n", holder.Pattern)
+		report += fmt.Sprintf("     Exclusive: %t\n", holder.Exclusive)
+		report += fmt.Sprintf("     Expires: %v (in %v)\n", holder.ExpiresAt.Format(time.RFC3339), expiresIn)
+	}
+
+	report += fmt.Sprintf("\n💡 Suggested resolution: %s\n", resolution)
+
+	switch resolution {
+	case ResolutionWait:
+		report += "   Wait for reservations to expire (all expire within 5 minutes)\n"
+	case ResolutionNegotiate:
+		report += "   Contact holders via Agent Mail to coordinate access\n"
+	case ResolutionForceRelease:
+		report += "   Use force_release_file_reservation for stale reservations\n"
+	case ResolutionChangePattern:
+		report += "   Modify your file pattern to avoid overlap\n"
+	}
+
+	return report
+}
+
+// determineConflictType categorizes the conflict
+func (a *Analyzer) determineConflictType(requestExclusive bool, holders []Holder) ConflictType {
+	// Check if all expire soon
+	threshold := time.Now().Add(5 * time.Minute)
+	allExpiringSoon := true
+	for _, holder := range holders {
+		if holder.ExpiresAt.After(threshold) {
+			allExpiringSoon = false
+			break
+		}
+	}
+
+	if allExpiringSoon {
+		return ConflictTypeExpiring
+	}
+
+	// Check holder types
+	hasExclusive := false
+	for _, holder := range holders {
+		if holder.Exclusive {
+			hasExclusive = true
+			break
+		}
+	}
+
+	if requestExclusive && hasExclusive {
+		return ConflictTypeExclusiveExclusive
+	}
+
+	return ConflictTypeExclusiveShared
+}
+
+// patternsOverlap checks if two file patterns overlap using glob matching
+// This implements symmetric fnmatchcase: either pattern can match the other
+func patternsOverlap(pattern1, pattern2 string) bool {
+	// Exact match
+	if pattern1 == pattern2 {
+		return true
+	}
+
+	// Try matching in both directions (symmetric)
+	match1, _ := filepath.Match(pattern1, pattern2)
+	match2, _ := filepath.Match(pattern2, pattern1)
+
+	return match1 || match2
+}

@@ -1,20 +1,26 @@
-version: '3.8'
 services:
   postgresql:
-    image: postgres:13
+    image: postgres:16-alpine
+    container_name: open-swarm-postgresql
     environment:
       POSTGRES_PASSWORD: temporal
       POSTGRES_USER: temporal
+      POSTGRES_DB: temporal
     ports:
       - "5433:5432"
+    volumes:
+      - postgresql-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U temporal"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - temporal-network
 
   temporal:
-    image: temporalio/auto-setup:latest
+    image: temporalio/auto-setup:1.29.1
+    container_name: open-swarm-temporal
     depends_on:
       postgresql:
         condition: service_healthy
@@ -24,12 +30,58 @@ services:
       - POSTGRES_USER=temporal
       - POSTGRES_PWD=temporal
       - POSTGRES_SEEDS=postgresql
+      - ENABLE_ES=false
+      - PROMETHEUS_ENDPOINT=0.0.0.0:9090
     ports:
-      - "7233:7233"  # Temporal server
-      - "8233:8233"  # Web UI
+      - "7233:7233"   # gRPC
+      - "7234:7234"   # Frontend gRPC
+      - "7235:7235"   # History gRPC
+      - "7239:7239"   # Matching gRPC
+      - "6933:6933"   # Frontend metrics
     healthcheck:
-      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "temporal:7233"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
+    networks:
+      - temporal-network
+
+  temporal-ui:
+    image: temporalio/ui:2.43.3
+    container_name: open-swarm-temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000,http://localhost:8081
+      - TEMPORAL_UI_ENABLED=true
+      - TEMPORAL_UI_PORT=8080
+      - TEMPORAL_NOTIFY_ON_NEW_VERSION=true
+    ports:
+      - "8081:8080"
+    networks:
+      - temporal-network
+
+  temporal-admin-tools:
+    image: temporalio/admin-tools:1.29.1
+    container_name: open-swarm-temporal-admin-tools
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CLI_ADDRESS=temporal:7233
+    stdin_open: true
+    tty: true
+    networks:
+      - temporal-network
+    profiles:
+      - admin
+
+networks:
+  temporal-network:
+    name: open-swarm-network
+    driver: bridge
+
+volumes:
+  postgresql-data:

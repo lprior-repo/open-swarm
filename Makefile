@@ -1,4 +1,4 @@
-.PHONY: help build test run-worker run-client docker-up docker-down clean fmt lint lint-fix test-race test-coverage test-tdd install-tools ci
+.PHONY: help build test run-worker run-client docker-up docker-up-monitoring docker-down docker-down-all setup-monitoring clean fmt lint lint-fix test-race test-coverage test-tdd install-tools ci
 
 # Variables
 GO := go
@@ -47,9 +47,12 @@ help:
 	@echo "  ci                - Run all CI checks locally (fmt, lint, test)"
 	@echo ""
 	@echo "Docker:"
-	@echo "  docker-up         - Start Docker Compose services (Temporal + PostgreSQL)"
+	@echo "  docker-up         - Start Docker Compose services (Temporal + PostgreSQL + UI)"
+	@echo "  docker-up-monitoring - Start services with Prometheus + Grafana"
 	@echo "  docker-down       - Stop Docker Compose services"
+	@echo "  docker-down-all   - Stop all services including monitoring"
 	@echo "  docker-logs       - View Docker Compose service logs"
+	@echo "  setup-monitoring  - Download and install Grafana dashboards"
 	@echo ""
 	@echo "Runtime:"
 	@echo "  run-worker        - Start the Temporal worker (requires docker-up)"
@@ -74,12 +77,16 @@ help:
 build:
 	@echo "Building all binaries..."
 	@mkdir -p bin
-	@$(GO) build -o bin/$(BINARY_MAIN) ./cmd/open-swarm
-	@echo "  ✓ Built ./bin/$(BINARY_MAIN)"
+	@$(GO) build -o bin/reactor ./cmd/reactor
+	@echo "  ✓ Built ./bin/reactor"
 	@$(GO) build -o bin/$(BINARY_WORKER) ./cmd/temporal-worker
 	@echo "  ✓ Built ./bin/$(BINARY_WORKER)"
 	@$(GO) build -o bin/$(BINARY_CLIENT) ./cmd/reactor-client
 	@echo "  ✓ Built ./bin/$(BINARY_CLIENT)"
+	@$(GO) build -o bin/single-agent-demo ./cmd/single-agent-demo
+	@echo "  ✓ Built ./bin/single-agent-demo"
+	@$(GO) build -o bin/workflow-demo ./cmd/workflow-demo
+	@echo "  ✓ Built ./bin/workflow-demo"
 	@echo ""
 	@echo "✓ All binaries built successfully"
 
@@ -110,11 +117,12 @@ run-client: build
 	@echo ""
 	./bin/$(BINARY_CLIENT) -task $(TASK) -prompt "$(PROMPT)"
 
-# Start Docker services (Temporal + PostgreSQL)
+# Start Docker services (Temporal + PostgreSQL + UI)
 docker-up:
 	@echo "Starting Docker services..."
-	@echo "  - PostgreSQL"
-	@echo "  - Temporal Server"
+	@echo "  - PostgreSQL 16"
+	@echo "  - Temporal Server v1.29.1"
+	@echo "  - Temporal UI v2.43.3"
 	@echo ""
 	@$(DOCKER) up -d
 	@echo ""
@@ -122,15 +130,52 @@ docker-up:
 	@sleep 10
 	@echo "✓ Services started successfully"
 	@echo ""
-	@echo "Web UI: http://localhost:8233"
-	@echo "Temporal server: localhost:7233"
-	@echo "PostgreSQL: localhost:5432"
+	@echo "🌐 Service URLs:"
+	@echo "  Temporal UI:     http://localhost:8081"
+	@echo "  Temporal Server: localhost:7233"
+	@echo "  PostgreSQL:      localhost:5433"
+
+# Start Docker services with monitoring
+docker-up-monitoring: setup-monitoring
+	@echo "Starting Docker services with monitoring..."
+	@echo "  - PostgreSQL 16"
+	@echo "  - Temporal Server v1.29.1"
+	@echo "  - Temporal UI v2.43.3"
+	@echo "  - Prometheus v2.54.1"
+	@echo "  - Grafana v11.4.0"
+	@echo "  - Node Exporter v1.8.2"
+	@echo ""
+	@$(DOCKER) -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+	@echo ""
+	@echo "Waiting for services to be healthy..."
+	@sleep 15
+	@echo "✓ All services started successfully"
+	@echo ""
+	@echo "🌐 Service URLs:"
+	@echo "  Temporal UI:     http://localhost:8081"
+	@echo "  Grafana:         http://localhost:3000 (admin/admin)"
+	@echo "  Prometheus:      http://localhost:9090"
+	@echo "  Temporal Server: localhost:7233"
+	@echo "  PostgreSQL:      localhost:5433"
+	@echo ""
+	@echo "💡 Tip: Visit Grafana → Dashboards → Temporal folder for pre-built dashboards"
 
 # Stop Docker services
 docker-down:
 	@echo "Stopping Docker services..."
 	@$(DOCKER) down
 	@echo "✓ Services stopped"
+
+# Stop all services including monitoring
+docker-down-all:
+	@echo "Stopping all Docker services..."
+	@$(DOCKER) -f docker-compose.yml -f docker-compose.monitoring.yml down
+	@echo "✓ All services stopped"
+
+# Setup monitoring dashboards
+setup-monitoring:
+	@echo "Setting up Grafana dashboards..."
+	@./scripts/setup-dashboards.sh
 
 # View Docker logs
 docker-logs:

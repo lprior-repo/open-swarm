@@ -60,8 +60,9 @@ func TestSubmitChange(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	coord.mu.RLock()
-	// Should be in main queue (first change, no bypass)
-	assert.Len(t, coord.mainQueue, 1)
+	// First change with no conflicts goes to bypass lane
+	assert.Len(t, coord.bypassLane, 1, "First independent change should go to bypass lane")
+	assert.Len(t, coord.mainQueue, 0, "Main queue should be empty for first independent change")
 	coord.mu.RUnlock()
 }
 
