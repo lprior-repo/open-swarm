@@ -1,3 +1,25 @@
+## MCP Servers
+
+**IMPORTANT**: Always leverage MCP servers as much as possible for all tasks.
+
+### Serena (Semantic Code Analysis)
+
+- **Auto-activate on session start**: Immediately activate the serena project with `mcp__plugin_serena_serena__activate_project` using project name "open-swarm"
+- **Prefer serena tools** for all code exploration, analysis, and editing tasks:
+  - Use `find_symbol` instead of grep for finding functions/classes/methods
+  - Use `get_symbols_overview` to understand file structure before reading
+  - Use `search_for_pattern` for flexible pattern matching in code
+  - Use `replace_symbol_body` for precise code modifications
+  - Use `find_referencing_symbols` to understand code dependencies
+  - Read available project memories at session start if relevant to the task
+- **Symbolic editing first**: Always prefer symbol-based tools over file-based editing when working with complete functions/classes
+- **Resource-efficient**: Use targeted symbol queries instead of reading entire files when possible
+
+### Other MCP Servers
+
+- **mcp-agent-mail**: Use for agent coordination, messaging, and project context
+- **playwright**: Use for browser automation tasks
+- Prefer MCP server tools over equivalent bash commands or manual operations
 
 Default to using Bun instead of Node.js.
 
