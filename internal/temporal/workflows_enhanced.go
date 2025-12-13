@@ -9,9 +9,57 @@ import (
 	"fmt"
 	"time"
 
+	"go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
+
+// gateExecutor executes a gate activity and handles common error/duration tracking
+type gateExecutor struct {
+	ctx            workflow.Context
+	logger         log.Logger
+	result         *EnhancedTCRResult
+	bootstrap      *BootstrapOutput
+	cellActivities *CellActivities
+}
+
+// executeGate runs a gate activity and handles result tracking
+func (ge *gateExecutor) executeGate(gateName string, activityFn interface{}, args ...interface{}) (*GateResult, error) {
+	ge.logger.Info(fmt.Sprintf("Gate: %s", gateName))
+	gateStart := workflow.Now(ge.ctx)
+
+	var gateResult *GateResult
+	err := workflow.ExecuteActivity(ge.ctx, activityFn, args...).Get(ge.ctx, &gateResult)
+
+	if err != nil {
+		gateResult = &GateResult{
+			GateName: gateName,
+			Passed:   false,
+			Error:    err.Error(),
+			Duration: workflow.Now(ge.ctx).Sub(gateStart),
+		}
+	} else {
+		gateResult.Duration = workflow.Now(ge.ctx).Sub(gateStart)
+	}
+
+	ge.result.GateResults = append(ge.result.GateResults, *gateResult)
+
+	if !gateResult.Passed {
+		ge.result.Error = fmt.Sprintf("%s failed: %v", gateName, gateResult.Error)
+		// Revert changes on gate failure
+		_ = workflow.ExecuteActivity(ge.ctx, ge.cellActivities.RevertChanges, ge.bootstrap).Get(ge.ctx, nil)
+		return gateResult, fmt.Errorf("gate failed")
+	}
+
+	// Track files changed if available
+	if len(gateResult.AgentResults) > 0 {
+		for _, agentResult := range gateResult.AgentResults {
+			ge.result.FilesChanged = append(ge.result.FilesChanged, agentResult.FilesChanged...)
+		}
+	}
+
+	return gateResult, nil
+}
 
 // EnhancedTCRWorkflow implements the 6-Gate Enhanced TCR pattern with file locks
 // Flow: Bootstrap → AcquireLocks → [GenTest → LintTest → VerifyRED → GenImpl → VerifyGREEN → MultiReview] → Commit/Revert → ReleaseLocks → Teardown
@@ -94,120 +142,58 @@ func EnhancedTCRWorkflow(ctx workflow.Context, input EnhancedTCRInput) (*Enhance
 	locksAcquired = filesLocked
 	logger.Info("File locks acquired", "files", filesLocked)
 
+	// Create gate executor for simplified gate execution
+	executor := &gateExecutor{
+		ctx:            ctx,
+		logger:         logger,
+		result:         result,
+		bootstrap:      bootstrap,
+		cellActivities: cellActivities,
+	}
+
 	// GATE 1: GenTest - Generate Tests
-	logger.Info("Gate 1: GenTest")
-	gateStart := workflow.Now(ctx)
-
-	var genTestResult *GateResult
-	err = workflow.ExecuteActivity(ctx, enhancedActivities.ExecuteGenTest,
-		bootstrap, input.TaskID, input.AcceptanceCriteria).Get(ctx, &genTestResult)
-
-	if err != nil || !genTestResult.Passed {
-		genTestResult.Duration = workflow.Now(ctx).Sub(gateStart)
-		result.GateResults = append(result.GateResults, *genTestResult)
-		result.Error = fmt.Sprintf("GenTest failed: %v", genTestResult.Error)
+	_, err = executor.executeGate("GenTest", enhancedActivities.ExecuteGenTest,
+		bootstrap, input.TaskID, input.AcceptanceCriteria)
+	if err != nil {
 		return result, nil
 	}
-	genTestResult.Duration = workflow.Now(ctx).Sub(gateStart)
-	result.GateResults = append(result.GateResults, *genTestResult)
-	result.FilesChanged = append(result.FilesChanged, genTestResult.AgentResults[0].FilesChanged...)
 
 	// GATE 2: LintTest - Lint Test Files
-	logger.Info("Gate 2: LintTest")
-	gateStart = workflow.Now(ctx)
-
-	var lintTestResult *GateResult
-	err = workflow.ExecuteActivity(ctx, enhancedActivities.ExecuteLintTest,
-		bootstrap).Get(ctx, &lintTestResult)
-
-	if err != nil || !lintTestResult.Passed {
-		lintTestResult.Duration = workflow.Now(ctx).Sub(gateStart)
-		result.GateResults = append(result.GateResults, *lintTestResult)
-		result.Error = fmt.Sprintf("LintTest failed: %v", lintTestResult.Error)
-		// Revert on lint failure
-		_ = workflow.ExecuteActivity(ctx, cellActivities.RevertChanges, bootstrap).Get(ctx, nil)
+	_, err = executor.executeGate("LintTest", enhancedActivities.ExecuteLintTest, bootstrap)
+	if err != nil {
 		return result, nil
 	}
-	lintTestResult.Duration = workflow.Now(ctx).Sub(gateStart)
-	result.GateResults = append(result.GateResults, *lintTestResult)
 
 	// GATE 3: VerifyRED - Tests Must Fail
-	logger.Info("Gate 3: VerifyRED")
-	gateStart = workflow.Now(ctx)
-
-	var verifyRedResult *GateResult
-	err = workflow.ExecuteActivity(ctx, enhancedActivities.ExecuteVerifyRED,
-		bootstrap).Get(ctx, &verifyRedResult)
-
-	if err != nil || !verifyRedResult.Passed {
-		verifyRedResult.Duration = workflow.Now(ctx).Sub(gateStart)
-		result.GateResults = append(result.GateResults, *verifyRedResult)
-		result.Error = fmt.Sprintf("VerifyRED failed: tests should fail but passed: %v", verifyRedResult.Error)
-		_ = workflow.ExecuteActivity(ctx, cellActivities.RevertChanges, bootstrap).Get(ctx, nil)
+	_, err = executor.executeGate("VerifyRED", enhancedActivities.ExecuteVerifyRED, bootstrap)
+	if err != nil {
 		return result, nil
 	}
-	verifyRedResult.Duration = workflow.Now(ctx).Sub(gateStart)
-	result.GateResults = append(result.GateResults, *verifyRedResult)
 
 	// GATE 4: GenImpl - Generate Implementation
-	logger.Info("Gate 4: GenImpl")
-	gateStart = workflow.Now(ctx)
-
-	var genImplResult *GateResult
-	err = workflow.ExecuteActivity(ctx, enhancedActivities.ExecuteGenImpl,
-		bootstrap, input.TaskID, input.Description, input.AcceptanceCriteria, "").Get(ctx, &genImplResult)
-
-	if err != nil || !genImplResult.Passed {
-		genImplResult.Duration = workflow.Now(ctx).Sub(gateStart)
-		result.GateResults = append(result.GateResults, *genImplResult)
-		result.Error = fmt.Sprintf("GenImpl failed: %v", genImplResult.Error)
-		_ = workflow.ExecuteActivity(ctx, cellActivities.RevertChanges, bootstrap).Get(ctx, nil)
+	_, err = executor.executeGate("GenImpl", enhancedActivities.ExecuteGenImpl,
+		bootstrap, input.TaskID, input.Description, input.AcceptanceCriteria, "")
+	if err != nil {
 		return result, nil
 	}
-	genImplResult.Duration = workflow.Now(ctx).Sub(gateStart)
-	result.GateResults = append(result.GateResults, *genImplResult)
-	result.FilesChanged = append(result.FilesChanged, genImplResult.AgentResults[0].FilesChanged...)
 
 	// GATE 5: VerifyGREEN - Tests Must Pass
-	logger.Info("Gate 5: VerifyGREEN")
-	gateStart = workflow.Now(ctx)
-
-	var verifyGreenResult *GateResult
-	err = workflow.ExecuteActivity(ctx, enhancedActivities.ExecuteVerifyGREEN,
-		bootstrap).Get(ctx, &verifyGreenResult)
-
-	if err != nil || !verifyGreenResult.Passed {
-		verifyGreenResult.Duration = workflow.Now(ctx).Sub(gateStart)
-		result.GateResults = append(result.GateResults, *verifyGreenResult)
-		result.Error = fmt.Sprintf("VerifyGREEN failed: tests did not pass: %v", verifyGreenResult.Error)
-		_ = workflow.ExecuteActivity(ctx, cellActivities.RevertChanges, bootstrap).Get(ctx, nil)
+	_, err = executor.executeGate("VerifyGREEN", enhancedActivities.ExecuteVerifyGREEN, bootstrap)
+	if err != nil {
 		return result, nil
 	}
-	verifyGreenResult.Duration = workflow.Now(ctx).Sub(gateStart)
-	result.GateResults = append(result.GateResults, *verifyGreenResult)
 
 	// GATE 6: MultiReview - 3 Reviewers with Unanimous Approval
-	logger.Info("Gate 6: MultiReview")
-	gateStart = workflow.Now(ctx)
-
 	reviewersCount := input.ReviewersCount
 	if reviewersCount == 0 {
 		reviewersCount = 3 // Default: 3 reviewers
 	}
 
-	var multiReviewResult *GateResult
-	err = workflow.ExecuteActivity(ctx, enhancedActivities.ExecuteMultiReview,
-		bootstrap, input.TaskID, input.Description, reviewersCount).Get(ctx, &multiReviewResult)
-
-	if err != nil || !multiReviewResult.Passed {
-		multiReviewResult.Duration = workflow.Now(ctx).Sub(gateStart)
-		result.GateResults = append(result.GateResults, *multiReviewResult)
-		result.Error = fmt.Sprintf("MultiReview failed: not unanimous approval: %v", multiReviewResult.Error)
-		_ = workflow.ExecuteActivity(ctx, cellActivities.RevertChanges, bootstrap).Get(ctx, nil)
+	_, err = executor.executeGate("MultiReview", enhancedActivities.ExecuteMultiReview,
+		bootstrap, input.TaskID, input.Description, reviewersCount)
+	if err != nil {
 		return result, nil
 	}
-	multiReviewResult.Duration = workflow.Now(ctx).Sub(gateStart)
-	result.GateResults = append(result.GateResults, *multiReviewResult)
 
 	// ALL GATES PASSED: Commit Changes
 	logger.Info("All gates passed - committing changes")

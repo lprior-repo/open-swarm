@@ -400,7 +400,7 @@ func (ea *EnhancedActivities) ExecuteMultiReview(ctx context.Context, bootstrap 
 
 	reviewTypes := []ReviewType{ReviewTypeTesting, ReviewTypeFunctional, ReviewTypeArchitecture}
 	votes := []ReviewVote{}
-	allApproved := true
+	voteParser := NewVoteParser()
 
 	for i := 0; i < reviewersCount; i++ {
 		reviewType := reviewTypes[i%len(reviewTypes)]
@@ -424,24 +424,17 @@ Your review should focus on: %s`, taskID, description, reviewType, getReviewFocu
 			Agent: "build",
 		})
 
-		vote := VoteApprove // Default
-		feedback := ""
+		var vote VoteResult
+		var feedback string
 
 		if err != nil {
 			vote = VoteReject
 			feedback = fmt.Sprintf("Review failed: %v", err)
-			allApproved = false
 		} else {
 			feedback = result.GetText()
-			// Simple heuristic: check for rejection keywords
-			feedbackLower := strings.ToLower(feedback)
-			if strings.Contains(feedbackLower, "reject") {
-				vote = VoteReject
-				allApproved = false
-			} else if strings.Contains(feedbackLower, "request") || strings.Contains(feedbackLower, "change") {
-				vote = VoteRequestChange
-				allApproved = false
-			}
+			// Use VoteParser to extract vote
+			parsed := voteParser.ParseVote(feedback)
+			vote = parsed.Vote
 		}
 
 		votes = append(votes, ReviewVote{
@@ -453,18 +446,23 @@ Your review should focus on: %s`, taskID, description, reviewType, getReviewFocu
 		})
 	}
 
+	// Check for unanimous approval
+	allApproved := voteParser.CheckUnanimousApproval(votes)
+
+	// Generate aggregated feedback if not approved
+	aggregator := NewReviewAggregator()
+	errorMsg := ""
+	if !allApproved {
+		errorMsg = aggregator.GetRejectionSummary(votes)
+	}
+
 	return &GateResult{
 		GateName:    "multi_review",
 		Passed:      allApproved,
 		ReviewVotes: votes,
 		Duration:    time.Since(startTime),
-		Error: func() string {
-			if !allApproved {
-				return "not all reviewers approved"
-			} else {
-				return ""
-			}
-		}(),
+		Error:       errorMsg,
+		Message:     aggregator.AggregateReviewFeedback(votes),
 	}, nil
 }
 
