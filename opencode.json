@@ -1,14 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.json",
 
-  "model": "anthropic/claude-sonnet-4-5",
-  "small_model": "anthropic/claude-haiku-4-5",
+  "model": "github/gpt-5-mini",
+  "small_model": "github/gpt-5-mini",
 
   "provider": {
-    "anthropic": {
-      "options": {
-        "apiKey": "{env:ANTHROPIC_API_KEY}"
-      }
+    "github": {
+      "options": {}
     }
   },
 
@@ -119,9 +117,9 @@
 
   "agent": {
     "validator": {
-      "description": "Validation engine using Claude Opus 4.5 for rigorous code verification",
+      "description": "Validation engine using GPT-5.2 for rigorous code verification",
       "mode": "subagent",
-      "model": "anthropic/claude-opus-4-5",
+      "model": "github/gpt-5.2",
       "temperature": 0.1,
       "max_steps": 50,
       "tools": {
@@ -131,12 +129,12 @@
         "bash": true,
         "serena_*": true
       },
-      "prompt": "You are a validation engine using Claude Opus 4.5 for rigorous verification. Perform deep analysis of code correctness, security vulnerabilities, architectural soundness, test coverage, and requirement compliance. Use advanced reasoning to identify subtle bugs, edge cases, and potential issues."
+      "prompt": "You are a validation engine using GPT-5.2 for rigorous verification. Perform deep analysis of code correctness, security vulnerabilities, architectural soundness, test coverage, and requirement compliance. Use advanced reasoning to identify subtle bugs, edge cases, and potential issues."
     },
     "coordinator": {
       "description": "Multi-agent coordination specialist using Agent Mail",
       "mode": "subagent",
-      "model": "anthropic/claude-sonnet-4-5",
+      "model": "github/gpt-5-mini",
       "temperature": 0.3,
       "max_steps": 30,
       "tools": {
@@ -150,7 +148,7 @@
     "reviewer": {
       "description": "Code review specialist for Go projects",
       "mode": "subagent",
-      "model": "anthropic/claude-sonnet-4-5",
+      "model": "github/gpt-5-mini",
       "temperature": 0.2,
       "max_steps": 40,
       "tools": {
@@ -166,7 +164,7 @@
     "tester": {
       "description": "Test writing specialist for Go",
       "mode": "subagent",
-      "model": "anthropic/claude-sonnet-4-5",
+      "model": "github/gpt-5-mini",
       "temperature": 0.3,
       "max_steps": 50,
       "tools": {
@@ -182,7 +180,7 @@
     "explorer": {
       "description": "Fast codebase exploration and search specialist",
       "mode": "subagent",
-      "model": "anthropic/claude-haiku-4-5",
+      "model": "github/gpt-5-mini",
       "temperature": 0.2,
       "max_steps": 30,
       "tools": {
@@ -199,7 +197,7 @@
     "documenter": {
       "description": "Documentation writer for Go projects",
       "mode": "subagent",
-      "model": "anthropic/claude-sonnet-4-5",
+      "model": "github/gpt-5-mini",
       "temperature": 0.4,
       "max_steps": 30,
       "tools": {
@@ -215,8 +213,8 @@
 
   "command": {
     "validate": {
-      "description": "Deep validation using Claude Opus 4.5",
-      "template": "Perform rigorous validation of $ARGUMENTS using Claude Opus 4.5. Check: correctness, security vulnerabilities, edge cases, test coverage, architectural soundness, requirement compliance, and subtle bugs.",
+      "description": "Deep validation using GPT-5.2",
+      "template": "Perform rigorous validation of $ARGUMENTS using GPT-5.2. Check: correctness, security vulnerabilities, edge cases, test coverage, architectural soundness, requirement compliance, and subtle bugs.",
       "agent": "validator"
     },
     "sync": {

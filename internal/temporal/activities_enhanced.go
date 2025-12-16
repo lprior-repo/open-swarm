@@ -137,6 +137,7 @@ Requirements:
 	result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 		Title: fmt.Sprintf("GenTest: %s", taskID),
 		Agent: "build",
+		Model: "github/gpt-5-mini",
 	})
 
 	if err != nil {
@@ -151,7 +152,7 @@ Requirements:
 		AgentResults: []AgentResult{
 			{
 				AgentName:    "build",
-				Model:        "claude-sonnet-4.5",
+				Model:        "github/gpt-5-mini",
 				Prompt:       prompt,
 				Response:     result.GetText(),
 				Success:      true,
@@ -307,6 +308,7 @@ Requirements:
 	result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 		Title: fmt.Sprintf("GenImpl: %s", taskID),
 		Agent: "build",
+		Model: "github/gpt-5-mini",
 	})
 
 	if err != nil {
@@ -321,7 +323,7 @@ Requirements:
 		AgentResults: []AgentResult{
 			{
 				AgentName:    "build",
-				Model:        "claude-sonnet-4.5",
+				Model:        "github/gpt-5-mini",
 				Prompt:       prompt,
 				Response:     result.GetText(),
 				Success:      true,
@@ -420,6 +422,7 @@ Your review should focus on: %s`, taskID, description, reviewType, getReviewFocu
 		result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 			Title: fmt.Sprintf("Review %d (%s): %s", i+1, reviewType, taskID),
 			Agent: "build",
+			Model: "github/gpt-5-mini",
 		})
 
 		var vote VoteResult
