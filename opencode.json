@@ -1,8 +1,8 @@
 {
   "$schema": "https://opencode.ai/config.json",
 
-  "model": "github/gpt-5-mini",
-  "small_model": "github/gpt-5-mini",
+  "model": "github-copilot/claude-3.5-sonnet",
+  "small_model": "github-copilot/claude-haiku-4.5",
 
   "provider": {
     "github": {
@@ -119,7 +119,7 @@
     "validator": {
       "description": "Validation engine using GPT-5.2 for rigorous code verification",
       "mode": "subagent",
-      "model": "github/gpt-5.2",
+      "model": "github-copilot/claude-3.7-sonnet-thought",
       "temperature": 0.1,
       "max_steps": 50,
       "tools": {
@@ -134,7 +134,7 @@
     "coordinator": {
       "description": "Multi-agent coordination specialist using Agent Mail",
       "mode": "subagent",
-      "model": "github/gpt-5-mini",
+      "model": "github-copilot/claude-haiku-4.5",
       "temperature": 0.3,
       "max_steps": 30,
       "tools": {
@@ -148,7 +148,7 @@
     "reviewer": {
       "description": "Code review specialist for Go projects",
       "mode": "subagent",
-      "model": "github/gpt-5-mini",
+      "model": "github-copilot/claude-haiku-4.5",
       "temperature": 0.2,
       "max_steps": 40,
       "tools": {
@@ -164,7 +164,7 @@
     "tester": {
       "description": "Test writing specialist for Go",
       "mode": "subagent",
-      "model": "github/gpt-5-mini",
+      "model": "github-copilot/claude-haiku-4.5",
       "temperature": 0.3,
       "max_steps": 50,
       "tools": {
@@ -180,7 +180,7 @@
     "explorer": {
       "description": "Fast codebase exploration and search specialist",
       "mode": "subagent",
-      "model": "github/gpt-5-mini",
+      "model": "github-copilot/claude-haiku-4.5",
       "temperature": 0.2,
       "max_steps": 30,
       "tools": {
@@ -197,7 +197,7 @@
     "documenter": {
       "description": "Documentation writer for Go projects",
       "mode": "subagent",
-      "model": "github/gpt-5-mini",
+      "model": "github-copilot/claude-haiku-4.5",
       "temperature": 0.4,
       "max_steps": 30,
       "tools": {
