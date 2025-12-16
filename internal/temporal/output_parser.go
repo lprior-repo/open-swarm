@@ -2,11 +2,12 @@ package temporal
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strings"
 
 	opencode "github.com/sst/opencode-sdk-go"
+
+	"open-swarm/internal/patternmatch"
 )
 
 // FileParseResult represents the outcome of parsing agent output for file paths
@@ -225,22 +226,7 @@ func (p *OutputParser) GetAllModifiedPaths(result *FileParseResult) []string {
 // MatchPattern checks if a file path matches a glob pattern
 // Useful for file locking and validation
 func (p *OutputParser) MatchPattern(filePath, pattern string) (bool, error) {
-	matched, err := filepath.Match(pattern, filePath)
-	if err != nil {
-		return false, fmt.Errorf("failed to match pattern %q against %q: %w", pattern, filePath, err)
-	}
-	if matched {
-		return true, nil
-	}
-
-	// Also try matching just the basename
-	basename := filepath.Base(filePath)
-	matched, err = filepath.Match(pattern, basename)
-	if err != nil {
-		return false, fmt.Errorf("failed to match pattern %q against basename %q: %w", pattern, basename, err)
-	}
-
-	return matched, nil
+	return patternmatch.Match(filePath, pattern)
 }
 
 // removeDuplicates removes duplicate strings while preserving order

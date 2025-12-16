@@ -112,8 +112,14 @@ func runDag(ctx workflow.Context, tasks []Task) error {
 	return executeDAG(ctx, logger, state, tasks)
 }
 
-// buildDAGOrder builds edges and performs topological sort
+// buildDAGOrder builds edges and performs topological sort.
+// Ensures all tasks are included, even those without dependencies.
 func buildDAGOrder(tasks []Task) ([]string, error) {
+	if len(tasks) == 0 {
+		return []string{}, nil
+	}
+
+	// Build edges from dependencies
 	edges := make([]toposort.Edge, 0)
 	for _, t := range tasks {
 		for _, dep := range t.Deps {
@@ -121,15 +127,37 @@ func buildDAGOrder(tasks []Task) ([]string, error) {
 		}
 	}
 
+	// If no edges (all tasks are independent), return tasks in order
+	if len(edges) == 0 {
+		flatOrder := make([]string, 0, len(tasks))
+		for _, t := range tasks {
+			flatOrder = append(flatOrder, t.Name)
+		}
+		return flatOrder, nil
+	}
+
 	sortedNodes, err := toposort.Toposort(edges)
 	if err != nil {
 		return nil, fmt.Errorf("cycle detected in DAG: %w", err)
 	}
 
-	flatOrder := make([]string, 0, len(sortedNodes))
+	// Build set of nodes in sorted output
+	inSorted := make(map[string]bool, len(sortedNodes))
+	flatOrder := make([]string, 0, len(tasks))
 	for _, node := range sortedNodes {
-		flatOrder = append(flatOrder, node.(string))
+		name := node.(string)
+		inSorted[name] = true
+		flatOrder = append(flatOrder, name)
 	}
+
+	// Add any tasks not included in toposort (root tasks with no dependents)
+	for _, t := range tasks {
+		if !inSorted[t.Name] {
+			// Prepend root tasks so they run first
+			flatOrder = append([]string{t.Name}, flatOrder...)
+		}
+	}
+
 	return flatOrder, nil
 }
 

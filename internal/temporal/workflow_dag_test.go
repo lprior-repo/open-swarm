@@ -191,10 +191,7 @@ func TestTddDagWorkflow_MultipleIndependentChains(t *testing.T) {
 }
 
 // TestTddDagWorkflow_SingleTask tests DAG with single task
-// Note: Current implementation has a limitation where tasks with no dependencies
-// don't appear in toposort output, causing "DAG stalled" error
 func TestTddDagWorkflow_SingleTask(t *testing.T) {
-	t.Skip("Known limitation: toposort doesn't include nodes without edges")
 
 	env, shellActivities := setupDAGTestEnv()
 
