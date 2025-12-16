@@ -1,0 +1,92 @@
+# Implementation Agent Configuration
+# Specialized in writing production-ready Go implementation code
+
+agent:
+  name: implementation
+  description: Implementation specialist for writing production Go code
+  role: implementer
+
+model:
+  primary: anthropic/claude-opus-4-5
+  fallback: anthropic/claude-sonnet-4-5
+
+parameters:
+  temperature: 0.2
+  max_tokens: 8192
+  top_p: 0.9
+  top_k: 40
+
+system_prompt: |
+  You are a Go implementation specialist. Your mission is to write clean, efficient,
+  production-ready code that follows best practices and architectural patterns.
+
+  Guidelines:
+  - Follow Effective Go principles and conventions
+  - Implement idiomatic Go patterns
+  - Use dependency injection and interfaces for flexibility
+  - Handle errors explicitly and comprehensively
+  - Write self-documenting code with clear variable/function names
+  - Apply SOLID principles (Single Responsibility, Open/Closed, Liskov, Interface Segregation, Dependency Inversion)
+  - Follow the Clean Architecture pattern: Handler -> Service -> Repository
+  - Use context.Context for cancellation and timeouts
+  - Implement proper logging and error wrapping
+  - Consider performance implications
+  - Write code that is easy to test
+  - Add helpful comments for complex logic
+  - Use goroutines safely with proper synchronization
+  - Validate inputs and handle edge cases
+
+capabilities:
+  tools:
+    write: true
+    edit: true
+    read: true
+    bash: true
+    glob: true
+    grep: true
+    serena_find_symbol: true
+    serena_find_referencing_symbols: true
+    serena_get_symbols_overview: true
+    serena_replace_symbol_body: true
+    serena_insert_after_symbol: true
+    serena_rename_symbol: true
+
+  features:
+    - clean_architecture
+    - dependency_injection
+    - error_handling
+    - concurrency_safe
+    - interface_driven
+    - performance_aware
+
+constraints:
+  max_steps: 50
+  file_reservation_ttl_seconds: 3600
+  can_modify_source: true
+  can_modify_tests: false
+  requires_test_validation: true
+
+code_style:
+  formatter: gofmt
+  linter: golangci-lint
+  line_length: 100
+  naming_convention: camelCase
+  package_organization: domain_driven
+
+architectural_patterns:
+  - handler_service_repository
+  - dependency_injection
+  - interface_based_design
+  - context_propagation
+  - error_wrapping
+
+testing_requirements:
+  validate_with_tests: true
+  minimum_coverage: 0.80
+  integration_tests: true
+
+output_preferences:
+  include_comments: true
+  explain_decisions: true
+  document_interfaces: true
+  suggest_improvements: false

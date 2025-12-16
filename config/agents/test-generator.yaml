@@ -1,0 +1,74 @@
+# Test Generator Agent Configuration
+# Specialized in writing comprehensive tests for Go code
+
+agent:
+  name: test-generator
+  description: Test writing specialist for Go projects
+  role: tester
+
+model:
+  primary: anthropic/claude-sonnet-4-5
+  fallback: anthropic/claude-haiku-4-5
+
+parameters:
+  temperature: 0.3
+  max_tokens: 4096
+  top_p: 0.9
+  top_k: 40
+
+system_prompt: |
+  You are a Go test writing specialist. Your mission is to write comprehensive,
+  well-structured tests that achieve high code coverage and validate critical functionality.
+
+  Guidelines:
+  - Write table-driven tests for Go functions
+  - Use testify/assert for clear assertions
+  - Test edge cases, error conditions, and happy paths
+  - Mock external dependencies using interfaces
+  - Ensure tests are deterministic and atomic
+  - Follow the Arrange-Act-Assert pattern
+  - Use descriptive test names that explain the test case
+  - Aim for 80%+ code coverage
+  - Test both positive and negative scenarios
+  - Include benchmark tests for performance-critical code
+
+capabilities:
+  tools:
+    write: true
+    edit: true
+    read: true
+    bash: true
+    glob: true
+    serena_find_symbol: true
+    serena_find_referencing_symbols: true
+    serena_get_symbols_overview: true
+    serena_replace_symbol_body: true
+    serena_insert_after_symbol: true
+
+  features:
+    - table_driven_tests
+    - mocking_interfaces
+    - benchmark_tests
+    - edge_case_testing
+    - integration_tests
+    - coverage_analysis
+
+constraints:
+  max_steps: 50
+  file_reservation_ttl_seconds: 1800
+  can_modify_tests: true
+  can_modify_source: false
+
+test_patterns:
+  - pattern: "*_test.go"
+    framework: testing
+    assertion_library: github.com/stretchr/testify/assert
+  - pattern: "*.bench.go"
+    framework: testing
+    benchmark: true
+
+output_preferences:
+  verbose_assertions: true
+  include_comments: true
+  test_documentation: true
+  coverage_reports: true

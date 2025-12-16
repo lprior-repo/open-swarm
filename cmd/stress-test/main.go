@@ -7,11 +7,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"strings"
-	"sync"
 	"time"
 
 	"go.temporal.io/sdk/client"
@@ -19,190 +19,123 @@ import (
 	"open-swarm/internal/temporal"
 )
 
-// AgentResult contains the result of an agent execution.
-type AgentResult struct {
-	AgentID  int
-	Success  bool
-	Duration time.Duration
-	Error    error
-	Output   string
-}
-
-const (
-	defaultNumAgents        = 60
-	defaultTaskType         = "shell"
-	defaultSleepDuration    = 0.1
-	oneHour                 = 1 * time.Hour
-	reportLineWidth         = 60
-	reportMinusLineWidth    = 60
-	percentMultiplier       = 100.0
-)
-
 func main() {
-	numAgents := flag.Int("agents", defaultNumAgents, "Number of parallel agents")
-	taskType := flag.String("task", defaultTaskType, "Task type: shell, tcr")
+	// Command line flags
+	numAgents := flag.Int("agents", 100, "Number of agents to spawn")
+	prompt := flag.String("prompt", "Write a hello world function in Go", "Prompt to send to each agent")
+	agentType := flag.String("agent", "general", "Agent type (build, plan, general)")
+	model := flag.String("model", "anthropic/claude-sonnet-4-5", "Model to use")
+	concurrency := flag.Int("concurrency", 10, "Concurrency limit (0 for unlimited)")
+	timeout := flag.Int("timeout", 300, "Timeout in seconds per agent")
+	repoPath := flag.String("repo", ".", "Repository path for bootstrap")
+	branch := flag.String("branch", "main", "Git branch")
+
 	flag.Parse()
 
-	log.Printf("🚀 Starting stress test with %d parallel agents", *numAgents)
-	log.Printf("📋 Task type: %s", *taskType)
+	log.Printf("🧪 Stress Test Configuration:")
+	log.Printf("   Agents: %d", *numAgents)
+	log.Printf("   Prompt: %s", *prompt)
+	log.Printf("   Agent Type: %s", *agentType)
+	log.Printf("   Model: %s", *model)
+	log.Printf("   Concurrency: %d", *concurrency)
+	log.Printf("   Timeout: %ds", *timeout)
+	log.Printf("   Repository: %s", *repoPath)
+	log.Printf("   Branch: %s", *branch)
 
 	// Connect to Temporal
 	c, err := client.Dial(client.Options{
 		HostPort: client.DefaultHostPort,
 	})
 	if err != nil {
-		log.Fatalf("❌ Unable to connect to Temporal: %v", err)
+		log.Fatalf("❌ Unable to create Temporal client: %v", err)
 	}
 	defer c.Close()
 
-	log.Println("✅ Connected to Temporal")
+	log.Println("✅ Connected to Temporal server")
 
-	// Track results
-	results := make([]AgentResult, *numAgents)
-	var wg sync.WaitGroup
-	startTime := time.Now()
-
-	// Launch all agents in parallel
-	for i := 0; i < *numAgents; i++ {
-		wg.Add(1)
-		go func(agentID int) {
-			defer wg.Done()
-			results[agentID] = runAgent(c, agentID, *taskType)
-		}(i)
+	// Create bootstrap output (simplified - in production you'd bootstrap properly)
+	bootstrap := &temporal.BootstrapOutput{
+		CellID:       fmt.Sprintf("stress-test-%d", time.Now().Unix()),
+		Port:         8000,
+		WorktreeID:   fmt.Sprintf("stress-test-%d", time.Now().Unix()),
+		WorktreePath: *repoPath,
+		BaseURL:      "http://localhost:8000",
+		ServerPID:    0,
 	}
 
-	// Wait for all agents to complete
-	log.Printf("⏳ Waiting for %d agents to complete...", *numAgents)
-	wg.Wait()
-	totalDuration := time.Since(startTime)
+	// Create stress test input
+	input := temporal.StressTestInput{
+		NumAgents:        *numAgents,
+		Prompt:           *prompt,
+		Agent:            *agentType,
+		Model:            *model,
+		Bootstrap:        bootstrap,
+		TimeoutSeconds:   *timeout,
+		ConcurrencyLimit: *concurrency,
+	}
 
-	// Analyze results
-	printResults(results, totalDuration)
-}
-
-func runAgent(c client.Client, agentID int, taskType string) AgentResult {
-	ctx := context.Background()
-	startTime := time.Now()
-
-	workflowID := fmt.Sprintf("stress-test-agent-%d-%d", agentID, time.Now().Unix())
+	// Start workflow
+	workflowID := fmt.Sprintf("stress-test-%d", time.Now().Unix())
 	workflowOptions := client.StartWorkflowOptions{
 		ID:        workflowID,
 		TaskQueue: "reactor-task-queue",
 	}
 
-	var we client.WorkflowRun
-	var err error
+	log.Printf("🚀 Starting stress test workflow: %s", workflowID)
+	startTime := time.Now()
 
-	switch taskType {
-	case "shell":
-		// Simple shell command task
-		input := temporal.DAGWorkflowInput{
-			WorkflowID: workflowID,
-			Branch:     "main",
-			Tasks: []temporal.Task{
-				{
-					Name:    fmt.Sprintf("agent-%d-task", agentID),
-					Command: fmt.Sprintf("echo 'Agent %d processing...' && sleep %g && echo 'Complete'", agentID, defaultSleepDuration),
-					Deps:    []string{},
-				},
-			},
-		}
-		we, err = c.ExecuteWorkflow(ctx, workflowOptions, temporal.TddDagWorkflow, input)
-
-	case "tcr":
-		// TCR workflow task
-		input := temporal.TCRWorkflowInput{
-			CellID:      fmt.Sprintf("cell-%d", agentID),
-			Branch:      "main",
-			TaskID:      fmt.Sprintf("stress-%d", agentID),
-			Description: fmt.Sprintf("Stress test agent %d", agentID),
-			Prompt:      fmt.Sprintf("Agent %d: Analyze codebase structure", agentID),
-		}
-		we, err = c.ExecuteWorkflow(ctx, workflowOptions, temporal.TCRWorkflow, input)
-
-	default:
-		return AgentResult{
-			AgentID:  agentID,
-			Success:  false,
-			Duration: time.Since(startTime),
-			Error:    fmt.Errorf("unknown task type: %s", taskType),
-		}
-	}
-
+	we, err := c.ExecuteWorkflow(context.Background(), workflowOptions, temporal.StressTestWorkflow, input)
 	if err != nil {
-		return AgentResult{
-			AgentID:  agentID,
-			Success:  false,
-			Duration: time.Since(startTime),
-			Error:    fmt.Errorf("failed to start workflow: %w", err),
-		}
+		log.Fatalf("❌ Unable to execute workflow: %v", err)
 	}
 
-	// Wait for workflow completion
-	var result interface{}
-	err = we.Get(ctx, &result)
+	log.Printf("⏳ Workflow started: %s", we.GetID())
+	log.Printf("   Run ID: %s", we.GetRunID())
+	log.Println("   Waiting for completion...")
+
+	// Wait for workflow to complete
+	var result temporal.StressTestResult
+	err = we.Get(context.Background(), &result)
+	if err != nil {
+		log.Fatalf("❌ Workflow execution failed: %v", err)
+	}
+
 	duration := time.Since(startTime)
 
-	if err != nil {
-		return AgentResult{
-			AgentID:  agentID,
-			Success:  false,
-			Duration: duration,
-			Error:    fmt.Errorf("workflow failed: %w", err),
+	// Print results
+	separator := strings.Repeat("=", 80)
+	log.Println("\n" + separator)
+	log.Println("📊 STRESS TEST RESULTS")
+	log.Println(separator)
+	log.Printf("Total Agents:       %d", result.TotalAgents)
+	log.Printf("Successful:         %d (%.1f%%)", result.Successful, float64(result.Successful)/float64(result.TotalAgents)*100)
+	log.Printf("Failed:             %d (%.1f%%)", result.Failed, float64(result.Failed)/float64(result.TotalAgents)*100)
+	log.Printf("Total Duration:     %v", result.TotalDuration)
+	log.Printf("Average Duration:   %v", result.AverageDuration)
+	log.Printf("Wall Clock Time:    %v", duration)
+	log.Println(separator)
+
+	if len(result.Errors) > 0 {
+		log.Printf("\n⚠️  Errors (%d):", len(result.Errors))
+		for i, errMsg := range result.Errors {
+			if i < 10 { // Limit to first 10 errors
+				log.Printf("   %d. %s", i+1, errMsg)
+			}
+		}
+		if len(result.Errors) > 10 {
+			log.Printf("   ... and %d more errors", len(result.Errors)-10)
 		}
 	}
 
-	return AgentResult{
-		AgentID:  agentID,
-		Success:  true,
-		Duration: duration,
-		Output:   fmt.Sprintf("%v", result),
-	}
-}
-
-func printResults(results []AgentResult, totalDuration time.Duration) {
-	successCount := 0
-	failCount := 0
-	var totalAgentTime time.Duration
-	var minDuration time.Duration = oneHour
-	var maxDuration time.Duration
-
-	for i, r := range results {
-		if r.Success {
-			successCount++
-		} else {
-			failCount++
-			log.Printf("❌ Agent %d failed: %v", i, r.Error)
-		}
-
-		totalAgentTime += r.Duration
-		if r.Duration < minDuration {
-			minDuration = r.Duration
-		}
-		if r.Duration > maxDuration {
-			maxDuration = r.Duration
-		}
+	// Print detailed results as JSON
+	resultJSON, err := json.MarshalIndent(result, "", "  ")
+	if err == nil {
+		log.Printf("\n📄 Full Results (JSON):\n%s\n", string(resultJSON))
 	}
 
-	avgDuration := totalAgentTime / time.Duration(len(results))
-
-	fmt.Println("\n" + strings.Repeat("═", reportLineWidth))
-	fmt.Println("📊 STRESS TEST RESULTS")
-	fmt.Println(strings.Repeat("═", reportLineWidth))
-	fmt.Printf("Total agents:        %d\n", len(results))
-	fmt.Printf("✅ Successful:       %d (%.1f%%)\n", successCount, float64(successCount)/float64(len(results))*percentMultiplier)
-	fmt.Printf("❌ Failed:           %d (%.1f%%)\n", failCount, float64(failCount)/float64(len(results))*percentMultiplier)
-	fmt.Println(strings.Repeat("─", reportMinusLineWidth))
-	fmt.Printf("⏱️  Total wall time:  %v\n", totalDuration)
-	fmt.Printf("📈 Avg agent time:   %v\n", avgDuration)
-	fmt.Printf("⚡ Min agent time:   %v\n", minDuration)
-	fmt.Printf("🐌 Max agent time:   %v\n", maxDuration)
-	fmt.Printf("🔥 Throughput:       %.2f agents/sec\n", float64(len(results))/totalDuration.Seconds())
-	fmt.Println(strings.Repeat("═", reportLineWidth) + "\n")
-
-	if successCount == len(results) {
-		fmt.Println("🎉 ALL AGENTS COMPLETED SUCCESSFULLY!")
+	if result.Failed > 0 {
+		log.Println("\n❌ Stress test completed with failures")
 	} else {
-		fmt.Printf("⚠️  %d agents failed - check logs above\n", failCount)
+		log.Println("\n✅ Stress test completed successfully!")
 	}
 }

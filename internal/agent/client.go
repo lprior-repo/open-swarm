@@ -8,6 +8,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/sst/opencode-sdk-go"
 	"github.com/sst/opencode-sdk-go/option"
@@ -113,8 +114,21 @@ func (c *Client) sendPromptMessage(ctx context.Context, sessionID string, prompt
 
 func (c *Client) applyPromptOptions(promptParams *opencode.SessionPromptParams, opts *PromptOptions) {
 	if opts.Model != "" {
+		// Parse model string in format "provider/model" or just "model"
+		providerID := ""
+		modelID := opts.Model
+		
+		if strings.Contains(opts.Model, "/") {
+			parts := strings.SplitN(opts.Model, "/", 2)
+			if len(parts) == 2 {
+				providerID = parts[0]
+				modelID = parts[1]
+			}
+		}
+		
 		promptParams.Model = opencode.F(opencode.SessionPromptParamsModel{
-			ModelID: opencode.F(opts.Model),
+			ProviderID: opencode.F(providerID),
+			ModelID:    opencode.F(modelID),
 		})
 	}
 
