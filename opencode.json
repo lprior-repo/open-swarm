@@ -22,8 +22,7 @@
     "list": true,
     "webfetch": true,
     "serena_*": true,
-    "agent-mail_*": true,
-    "beads_*": true
+    "agent-mail_*": true
   },
 
   "permission": {
@@ -39,7 +38,6 @@
     "todowrite": "allow",
     "todoread": "allow",
     "agent-mail_*": "allow",
-    "beads_*": "allow",
     "serena_*": "allow"
   },
 
@@ -71,19 +69,14 @@
       "enabled": true,
       "timeout": 60000
     },
-    "beads": {
-      "type": "local",
-      "command": ["beads-mcp"],
-      "environment": {
-        "BEADS_USE_DAEMON": "1",
-        "BEADS_ACTOR": "opencode"
-      },
-      "enabled": true,
-      "timeout": 30000
-    },
+
     "sequential-thinking": {
       "type": "local",
-      "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
       "enabled": true,
       "timeout": 30000
     },
@@ -122,10 +115,7 @@
     }
   },
 
-  "instructions": [
-    "AGENTS.md",
-    "CONTRIBUTING.md"
-  ],
+  "instructions": ["AGENTS.md", "CONTRIBUTING.md"],
 
   "agent": {
     "validator": {
@@ -144,7 +134,7 @@
       "prompt": "You are a validation engine using Claude Opus 4.5 for rigorous verification. Perform deep analysis of code correctness, security vulnerabilities, architectural soundness, test coverage, and requirement compliance. Use advanced reasoning to identify subtle bugs, edge cases, and potential issues."
     },
     "coordinator": {
-      "description": "Multi-agent coordination specialist using Agent Mail and Beads",
+      "description": "Multi-agent coordination specialist using Agent Mail",
       "mode": "subagent",
       "model": "anthropic/claude-sonnet-4-5",
       "temperature": 0.3,
@@ -153,10 +143,9 @@
         "write": false,
         "edit": false,
         "read": true,
-        "agent-mail_*": true,
-        "beads_*": true
+        "agent-mail_*": true
       },
-      "prompt": "You specialize in coordinating multiple agents using Agent Mail for messaging and file reservations, and Beads for task management. Focus on communication, task assignment, and conflict resolution."
+      "prompt": "You specialize in coordinating multiple agents using Agent Mail for messaging and file reservations. Focus on communication, task assignment, and conflict resolution."
     },
     "reviewer": {
       "description": "Code review specialist for Go projects",
@@ -242,18 +231,7 @@
       "description": "Release file reservations",
       "template": "Release all file reservations for this agent in project {env:PWD}"
     },
-    "task-ready": {
-      "description": "Check for ready work in Beads",
-      "template": "Run 'bd ready --json' and analyze the output. Show unblocked tasks ready to work on."
-    },
-    "task-start": {
-      "description": "Start work on a Beads task",
-      "template": "Update Beads task $ARGUMENTS to status 'in_progress'. Reserve related files via Agent Mail. Report task details."
-    },
-    "task-complete": {
-      "description": "Complete a Beads task",
-      "template": "Close Beads task $ARGUMENTS with reason. Release file reservations. Update thread in Agent Mail if applicable."
-    },
+
     "review": {
       "description": "Comprehensive code review",
       "template": "Review $ARGUMENTS for: security issues, performance problems, Go best practices, error handling, test coverage.",

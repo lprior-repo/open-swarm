@@ -109,7 +109,7 @@ func printReport(r temporal.BenchmarkResult) {
 		}
 	}
 
-	fmt.Println("==========================================\n")
+	fmt.Println("==========================================")
 }
 
 func pct(a, b int) float64 {

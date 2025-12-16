@@ -4,8 +4,6 @@
 GO := go
 DOCKER := docker-compose
 BINARY_WORKER := temporal-worker
-BINARY_CLIENT := reactor-client
-BINARY_MAIN := open-swarm
 BINARY_BENCHMARK := benchmark-tcr
 
 # Detect OS for cross-platform support
@@ -30,7 +28,7 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Build & Development:"
-	@echo "  build             - Build all binaries (worker, client, coordinator, benchmark)"
+	@echo "  build             - Build all binaries (worker, benchmark)"
 	@echo "  fmt               - Format code with gofmt"
 	@echo "  install-tools     - Install required development tools"
 	@echo ""
@@ -57,7 +55,6 @@ help:
 	@echo ""
 	@echo "Runtime:"
 	@echo "  run-worker        - Start the Temporal worker (requires docker-up)"
-	@echo "  run-client        - Start the reactor client (usage: make run-client TASK=<id> PROMPT='<prompt>')"
 	@echo "  run-benchmark     - Run TCR benchmark (usage: make run-benchmark STRATEGY=basic RUNS=5 PROMPT='task')"
 	@echo ""
 	@echo "Cleanup:"
@@ -79,16 +76,8 @@ help:
 build:
 	@echo "Building all binaries..."
 	@mkdir -p bin
-	@$(GO) build -o bin/reactor ./cmd/reactor
-	@echo "  ✓ Built ./bin/reactor"
 	@$(GO) build -o bin/$(BINARY_WORKER) ./cmd/temporal-worker
 	@echo "  ✓ Built ./bin/$(BINARY_WORKER)"
-	@$(GO) build -o bin/$(BINARY_CLIENT) ./cmd/reactor-client
-	@echo "  ✓ Built ./bin/$(BINARY_CLIENT)"
-	@$(GO) build -o bin/single-agent-demo ./cmd/single-agent-demo
-	@echo "  ✓ Built ./bin/single-agent-demo"
-	@$(GO) build -o bin/workflow-demo ./cmd/workflow-demo
-	@echo "  ✓ Built ./bin/workflow-demo"
 	@$(GO) build -o bin/$(BINARY_BENCHMARK) ./cmd/benchmark-tcr
 	@echo "  ✓ Built ./bin/$(BINARY_BENCHMARK)"
 	@echo ""
@@ -107,19 +96,6 @@ run-worker: build
 	@echo "Make sure Docker services are running (run 'make docker-up' first)"
 	@echo ""
 	./bin/$(BINARY_WORKER)
-
-# Run reactor client with task
-run-client: build
-	@if [ -z "$(TASK)" ] || [ -z "$(PROMPT)" ]; then \
-		echo "Error: TASK and PROMPT are required"; \
-		echo "Usage: make run-client TASK=<id> PROMPT='<prompt>'"; \
-		exit 1; \
-	fi
-	@echo "Submitting workflow..."
-	@echo "Task ID: $(TASK)"
-	@echo "Prompt: $(PROMPT)"
-	@echo ""
-	./bin/$(BINARY_CLIENT) -task $(TASK) -prompt "$(PROMPT)"
 
 # Run benchmark
 run-benchmark: build

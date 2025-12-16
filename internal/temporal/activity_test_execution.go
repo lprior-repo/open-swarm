@@ -349,7 +349,7 @@ func (tr *TestResult) Summary() string {
 			tr.FailedTests, tr.TotalTests))
 	}
 
-	summary.WriteString(fmt.Sprintf(" (Duration: %.2fs)", tr.Duration))
+	summary.WriteString(fmt.Sprintf(" (Duration: %.2fs)", tr.Duration.Seconds()))
 
 	if len(tr.FailureTests) > 0 && len(tr.FailureTests) <= 5 {
 		summary.WriteString(fmt.Sprintf("\nFailed tests: %s",

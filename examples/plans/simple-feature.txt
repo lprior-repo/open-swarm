@@ -1,6 +1,0 @@
-# Simple Feature Plan
-
-1. Create user authentication endpoint [P0]
-2. Add password hashing [P1]
-3. Implement JWT token generation [P1]
-4. Add login rate limiting [P2]

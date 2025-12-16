@@ -160,7 +160,7 @@ func (aa *AgentActivities) InvokeAgent(ctx context.Context, input *AgentInvokeIn
 		logger.Error("Agent invocation failed", "error", err)
 		return &AgentInvokeResult{
 			Success:   false,
-			Error:     fmt.Sprintf("failed to invoke agent: %w", err),
+			Error:     fmt.Sprintf("failed to invoke agent: %v", err),
 			Duration:  time.Since(startTime),
 			SessionID: opts.SessionID,
 		}, err
