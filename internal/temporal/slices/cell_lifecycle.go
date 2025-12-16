@@ -161,12 +161,7 @@ func (c *CellLifecycleActivities) TeardownCell(ctx context.Context, output Boots
 
 	// 1. Shutdown Server (INV-005: process must be killed)
 	if output.ServerPID != 0 {
-		serverHandle := &infra.ServerHandle{
-			Port:    output.Port,
-			BaseURL: output.BaseURL,
-			PID:     output.ServerPID,
-		}
-		if err := c.serverManager.Shutdown(serverHandle); err != nil {
+		if err := c.serverManager.ShutdownByPID(output.ServerPID); err != nil {
 			errs = append(errs, fmt.Errorf("failed to shutdown server (PID %d): %w", output.ServerPID, err))
 		} else {
 			logger.Info("Server shutdown completed", "cellID", output.CellID, "pid", output.ServerPID)

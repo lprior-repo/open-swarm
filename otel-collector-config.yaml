@@ -1,0 +1,91 @@
+# OpenTelemetry Collector Configuration
+# This collector receives traces from open-swarm applications and exports them to various backends
+
+receivers:
+  # OTLP receiver for HTTP (default port 4318)
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  # Batch processor to reduce number of outgoing connections
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # Resource processor to add/modify resource attributes
+  resource:
+    attributes:
+      - key: service.name
+        value: open-swarm
+        action: upsert
+      - key: deployment.environment
+        value: development
+        action: upsert
+
+exporters:
+  # Debug exporter - prints traces to console (replaces deprecated logging exporter)
+  debug:
+    verbosity: normal
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+  # File exporter - writes traces to JSON file
+  file:
+    path: /data/otel-traces.json
+
+  # OTLP exporter for Jaeger
+  otlp/jaeger:
+    endpoint: http://jaeger:4318
+    tls:
+      insecure: true
+
+  # Prometheus exporter for metrics (optional)
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    namespace: open_swarm
+    const_labels:
+      environment: development
+
+  # Zipkin exporter (optional)
+  zipkin:
+    endpoint: http://localhost:9411/api/v2/spans
+    format: json
+
+service:
+  # Telemetry configuration for the collector itself
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+
+  # Pipeline configuration
+  pipelines:
+    # Traces pipeline
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [debug, file]
+      # Uncomment to enable additional exporters:
+      # exporters: [debug, file, zipkin]
+
+    # Metrics pipeline (if metrics are needed in future)
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug, prometheus]
+
+  # Extensions for health checks and monitoring
+  extensions: []

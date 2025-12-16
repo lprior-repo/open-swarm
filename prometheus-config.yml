@@ -1,0 +1,62 @@
+# Prometheus configuration for Open Swarm observability
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'open-swarm'
+    environment: 'development'
+
+# Scrape configurations
+scrape_configs:
+  # OpenTelemetry Collector metrics
+  - job_name: 'otel-collector'
+    static_configs:
+      - targets: ['otel-collector:8888']
+        labels:
+          service: 'otel-collector'
+          component: 'collector'
+
+  # OpenTelemetry exported metrics from applications
+  - job_name: 'open-swarm-metrics'
+    static_configs:
+      - targets: ['otel-collector:8889']
+        labels:
+          service: 'open-swarm'
+          component: 'application'
+
+  # Jaeger metrics
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['jaeger:14269']
+        labels:
+          service: 'jaeger'
+          component: 'tracing'
+
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+          component: 'monitoring'
+
+  # Temporal metrics (if exposed)
+  - job_name: 'temporal'
+    static_configs:
+      - targets: ['host.docker.internal:8081']
+        labels:
+          service: 'temporal'
+          component: 'workflow'
+    metrics_path: /metrics
+    scheme: http
+
+# Alerting rules (optional - can be extended)
+rule_files:
+  # - "alerts/*.yml"
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093']

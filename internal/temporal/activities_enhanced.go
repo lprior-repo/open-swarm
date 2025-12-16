@@ -11,10 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"go.temporal.io/sdk/activity"
 
 	"open-swarm/internal/agent"
 	"open-swarm/internal/filelock"
+	"open-swarm/internal/telemetry"
 	"open-swarm/internal/workflow"
 )
 
@@ -57,6 +61,11 @@ func getChangedFiles(ctx context.Context, cell *workflow.CellBootstrap) []string
 // AcquireFileLocks acquires locks on task-related files
 // Returns list of locked file patterns
 func (ea *EnhancedActivities) AcquireFileLocks(ctx context.Context, cellID string, taskID string) ([]string, error) {
+	ctx, span := telemetry.StartSpan(ctx, "activity.enhanced", "AcquireFileLocks",
+		trace.WithAttributes(telemetry.TCRAttrs("", taskID)...),
+	)
+	defer span.End()
+
 	logger := activity.GetLogger(ctx)
 	logger.Info("Acquiring file locks", "cellID", cellID, "taskID", taskID)
 
@@ -86,13 +95,21 @@ func (ea *EnhancedActivities) AcquireFileLocks(ctx context.Context, cellID strin
 		}
 		lockedPatterns = append(lockedPatterns, pattern)
 		logger.Info("Lock acquired", "pattern", pattern, "holder", cellID)
+		telemetry.AddEvent(ctx, "lock.acquired", attribute.String("pattern", pattern))
 	}
 
+	span.SetAttributes(attribute.Int("locks.acquired", len(lockedPatterns)))
+	span.SetStatus(codes.Ok, "all locks acquired")
 	return lockedPatterns, nil
 }
 
 // ReleaseFileLocks releases all locks held by a cell
 func (ea *EnhancedActivities) ReleaseFileLocks(ctx context.Context, cellID string, patterns []string) error {
+	ctx, span := telemetry.StartSpan(ctx, "activity.enhanced", "ReleaseFileLocks",
+		trace.WithAttributes(attribute.Int("locks.count", len(patterns))),
+	)
+	defer span.End()
+
 	logger := activity.GetLogger(ctx)
 	logger.Info("Releasing file locks", "cellID", cellID, "count", len(patterns))
 
@@ -108,17 +125,25 @@ func (ea *EnhancedActivities) ReleaseFileLocks(ctx context.Context, cellID strin
 	}
 
 	if len(errs) > 0 {
+		span.SetStatus(codes.Error, "failed to release some locks")
 		return fmt.Errorf("failed to release some locks: %v", errs)
 	}
+	span.SetStatus(codes.Ok, "all locks released")
 	return nil
 }
 
 // ExecuteGenTest - Gate 1: Generate test files based on acceptance criteria
 func (ea *EnhancedActivities) ExecuteGenTest(ctx context.Context, bootstrap *BootstrapOutput, taskID string, acceptanceCriteria string) (*GateResult, error) {
+	ctx, span := telemetry.StartSpan(ctx, "activity.enhanced", "ExecuteGenTest",
+		trace.WithAttributes(telemetry.TCRAttrs("", taskID)...),
+	)
+	defer span.End()
+
 	logger := activity.GetLogger(ctx)
 	logger.Info("Gate: GenTest", "taskID", taskID)
 
 	startTime := time.Now()
+	telemetry.AddEvent(ctx, "gate.start", telemetry.AttrGateName.String("gen_test"))
 	cellActivities := NewCellActivities()
 	cell := cellActivities.reconstructCell(bootstrap)
 
@@ -136,15 +161,29 @@ Requirements:
 
 	result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 		Title: fmt.Sprintf("GenTest: %s", taskID),
-		Agent: "build",
-		Model: "github/gpt-5-mini",
+		Agent: "tester",
+		Model: "github-copilot/claude-haiku-4.5",
 	})
 
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "test generation failed")
+		telemetry.AddEvent(ctx, "gate.failed", telemetry.AttrGateName.String("gen_test"))
 		return newFailedGateResult("gen_test", err, startTime), err
 	}
 
 	filesChanged := getChangedFiles(ctx, cell)
+
+	span.SetAttributes(
+		telemetry.AttrGateName.String("gen_test"),
+		telemetry.AttrGatePassed.Bool(true),
+		attribute.Int("files.changed", len(filesChanged)),
+	)
+	telemetry.AddEvent(ctx, "gate.passed",
+		telemetry.AttrGateName.String("gen_test"),
+		attribute.Int("files.changed", len(filesChanged)),
+	)
+	span.SetStatus(codes.Ok, "test generation completed")
 
 	return &GateResult{
 		GateName: "gen_test",
@@ -152,7 +191,7 @@ Requirements:
 		AgentResults: []AgentResult{
 			{
 				AgentName:    "build",
-				Model:        "github/gpt-5-mini",
+				Model:        "github-copilot/claude-haiku-4.5",
 				Prompt:       prompt,
 				Response:     result.GetText(),
 				Success:      true,
@@ -166,10 +205,14 @@ Requirements:
 
 // ExecuteLintTest - Gate 2: Lint test files
 func (ea *EnhancedActivities) ExecuteLintTest(ctx context.Context, bootstrap *BootstrapOutput) (*GateResult, error) {
+	ctx, span := telemetry.StartSpan(ctx, "activity.enhanced", "ExecuteLintTest")
+	defer span.End()
+
 	logger := activity.GetLogger(ctx)
 	logger.Info("Gate: LintTest")
 
 	startTime := time.Now()
+	telemetry.AddEvent(ctx, "gate.start", telemetry.AttrGateName.String("lint_test"))
 	cellActivities := NewCellActivities()
 	cell := cellActivities.reconstructCell(bootstrap)
 
@@ -184,6 +227,20 @@ func (ea *EnhancedActivities) ExecuteLintTest(ctx context.Context, bootstrap *Bo
 	// Parse lint output using LintParser
 	parser := NewLintParser()
 	parseResult := parser.ParseGolangciLint(output)
+
+	span.SetAttributes(
+		telemetry.AttrGateName.String("lint_test"),
+		telemetry.AttrGatePassed.Bool(!parseResult.HasErrors),
+		attribute.Int("lint.issues", len(parseResult.Issues)),
+	)
+
+	if parseResult.HasErrors {
+		span.SetStatus(codes.Error, "lint check failed")
+		telemetry.AddEvent(ctx, "gate.failed", telemetry.AttrGateName.String("lint_test"))
+	} else {
+		span.SetStatus(codes.Ok, "lint check passed")
+		telemetry.AddEvent(ctx, "gate.passed", telemetry.AttrGateName.String("lint_test"))
+	}
 
 	return &GateResult{
 		GateName: "lint_test",
@@ -201,10 +258,14 @@ func (ea *EnhancedActivities) ExecuteLintTest(ctx context.Context, bootstrap *Bo
 
 // ExecuteVerifyRED - Gate 3: Verify tests fail (RED phase)
 func (ea *EnhancedActivities) ExecuteVerifyRED(ctx context.Context, bootstrap *BootstrapOutput) (*GateResult, error) {
+	ctx, span := telemetry.StartSpan(ctx, "activity.enhanced", "ExecuteVerifyRED")
+	defer span.End()
+
 	logger := activity.GetLogger(ctx)
 	logger.Info("Gate: VerifyRED")
 
 	startTime := time.Now()
+	telemetry.AddEvent(ctx, "gate.start", telemetry.AttrGateName.String("verify_red"))
 	cellActivities := NewCellActivities()
 	cell := cellActivities.reconstructCell(bootstrap)
 
@@ -227,6 +288,21 @@ func (ea *EnhancedActivities) ExecuteVerifyRED(ctx context.Context, bootstrap *B
 	debugInfo := ""
 	if parseResult.HasFailures {
 		debugInfo = parser.GetFailureSummary(parseResult)
+	}
+
+	span.SetAttributes(
+		telemetry.AttrGateName.String("verify_red"),
+		telemetry.AttrGatePassed.Bool(redPassed),
+		telemetry.AttrTestsPassed.Int(parseResult.PassedTests),
+		telemetry.AttrTestsFailed.Int(parseResult.FailedTests),
+	)
+
+	if redPassed {
+		span.SetStatus(codes.Ok, "RED phase verified - tests failed as expected")
+		telemetry.AddEvent(ctx, "gate.passed", telemetry.AttrGateName.String("verify_red"))
+	} else {
+		span.SetStatus(codes.Error, "RED phase failed - tests passed but should fail")
+		telemetry.AddEvent(ctx, "gate.failed", telemetry.AttrGateName.String("verify_red"))
 	}
 
 	return &GateResult{
@@ -266,10 +342,22 @@ func (ea *EnhancedActivities) ExecuteVerifyRED(ctx context.Context, bootstrap *B
 //	  genImplResult, _ := ExecuteGenImpl(ctx, bootstrap, taskID, desc, criteria, testOutput)
 //	}
 func (ea *EnhancedActivities) ExecuteGenImpl(ctx context.Context, bootstrap *BootstrapOutput, taskID string, description string, acceptanceCriteria string, testFailureOutput string) (*GateResult, error) {
+	ctx, span := telemetry.StartSpan(ctx, "activity.enhanced", "ExecuteGenImpl",
+		trace.WithAttributes(telemetry.TCRAttrs("", taskID)...),
+	)
+	defer span.End()
+
 	logger := activity.GetLogger(ctx)
 	logger.Info("Gate: GenImpl", "taskID", taskID)
 
 	startTime := time.Now()
+	telemetry.AddEvent(ctx, "gate.start", telemetry.AttrGateName.String("gen_impl"))
+
+	isRetry := testFailureOutput != ""
+	if isRetry {
+		span.SetAttributes(attribute.Bool("retry", true))
+		telemetry.AddEvent(ctx, "impl.retry", attribute.String("reason", "test_failures"))
+	}
 	cellActivities := NewCellActivities()
 	cell := cellActivities.reconstructCell(bootstrap)
 
@@ -308,14 +396,28 @@ Requirements:
 	result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 		Title: fmt.Sprintf("GenImpl: %s", taskID),
 		Agent: "build",
-		Model: "github/gpt-5-mini",
+		Model: "github-copilot/claude-haiku-4.5",
 	})
 
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "implementation generation failed")
+		telemetry.AddEvent(ctx, "gate.failed", telemetry.AttrGateName.String("gen_impl"))
 		return newFailedGateResult("gen_impl", err, startTime), err
 	}
 
 	filesChanged := getChangedFiles(ctx, cell)
+
+	span.SetAttributes(
+		telemetry.AttrGateName.String("gen_impl"),
+		telemetry.AttrGatePassed.Bool(true),
+		attribute.Int("files.changed", len(filesChanged)),
+	)
+	telemetry.AddEvent(ctx, "gate.passed",
+		telemetry.AttrGateName.String("gen_impl"),
+		attribute.Int("files.changed", len(filesChanged)),
+	)
+	span.SetStatus(codes.Ok, "implementation generation completed")
 
 	return &GateResult{
 		GateName: "gen_impl",
@@ -323,7 +425,7 @@ Requirements:
 		AgentResults: []AgentResult{
 			{
 				AgentName:    "build",
-				Model:        "github/gpt-5-mini",
+				Model:        "github-copilot/claude-haiku-4.5",
 				Prompt:       prompt,
 				Response:     result.GetText(),
 				Success:      true,
@@ -337,10 +439,14 @@ Requirements:
 
 // ExecuteVerifyGREEN - Gate 5: Verify tests pass (GREEN phase)
 func (ea *EnhancedActivities) ExecuteVerifyGREEN(ctx context.Context, bootstrap *BootstrapOutput) (*GateResult, error) {
+	ctx, span := telemetry.StartSpan(ctx, "activity.enhanced", "ExecuteVerifyGREEN")
+	defer span.End()
+
 	logger := activity.GetLogger(ctx)
 	logger.Info("Gate: VerifyGREEN")
 
 	startTime := time.Now()
+	telemetry.AddEvent(ctx, "gate.start", telemetry.AttrGateName.String("verify_green"))
 	cellActivities := NewCellActivities()
 	cell := cellActivities.reconstructCell(bootstrap)
 
@@ -362,6 +468,24 @@ func (ea *EnhancedActivities) ExecuteVerifyGREEN(ctx context.Context, bootstrap 
 	failedTestNames := make([]string, 0, len(parseResult.Failures))
 	for _, failure := range parseResult.Failures {
 		failedTestNames = append(failedTestNames, failure.TestName)
+	}
+
+	span.SetAttributes(
+		telemetry.AttrGateName.String("verify_green"),
+		telemetry.AttrGatePassed.Bool(testsPassed),
+		telemetry.AttrTestsPassed.Int(parseResult.PassedTests),
+		telemetry.AttrTestsFailed.Int(parseResult.FailedTests),
+	)
+
+	if testsPassed {
+		span.SetStatus(codes.Ok, "GREEN phase verified - all tests passed")
+		telemetry.AddEvent(ctx, "gate.passed", telemetry.AttrGateName.String("verify_green"))
+	} else {
+		span.SetStatus(codes.Error, "GREEN phase failed - tests failed")
+		telemetry.AddEvent(ctx, "gate.failed",
+			telemetry.AttrGateName.String("verify_green"),
+			attribute.Int("failed_tests", len(failedTestNames)),
+		)
 	}
 
 	return &GateResult{
@@ -391,10 +515,19 @@ func (ea *EnhancedActivities) ExecuteVerifyGREEN(ctx context.Context, bootstrap 
 
 // ExecuteMultiReview - Gate 6: Multi-reviewer approval (3 reviewers, unanimous)
 func (ea *EnhancedActivities) ExecuteMultiReview(ctx context.Context, bootstrap *BootstrapOutput, taskID string, description string, reviewersCount int) (*GateResult, error) {
+	ctx, span := telemetry.StartSpan(ctx, "activity.enhanced", "ExecuteMultiReview",
+		trace.WithAttributes(telemetry.TCRAttrs("", taskID)...),
+	)
+	defer span.End()
+
 	logger := activity.GetLogger(ctx)
 	logger.Info("Gate: MultiReview", "reviewers", reviewersCount)
 
 	startTime := time.Now()
+	telemetry.AddEvent(ctx, "gate.start",
+		telemetry.AttrGateName.String("multi_review"),
+		attribute.Int("reviewers.count", reviewersCount),
+	)
 	cellActivities := NewCellActivities()
 	cell := cellActivities.reconstructCell(bootstrap)
 
@@ -422,7 +555,7 @@ Your review should focus on: %s`, taskID, description, reviewType, getReviewFocu
 		result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 			Title: fmt.Sprintf("Review %d (%s): %s", i+1, reviewType, taskID),
 			Agent: "build",
-			Model: "github/gpt-5-mini",
+			Model: "github-copilot/claude-haiku-4.5",
 		})
 
 		var vote VoteResult
@@ -445,6 +578,12 @@ Your review should focus on: %s`, taskID, description, reviewType, getReviewFocu
 			Feedback:     feedback,
 			Duration:     time.Since(reviewStart),
 		})
+
+		telemetry.AddEvent(ctx, "review.completed",
+			attribute.Int("reviewer.number", i+1),
+			attribute.String("review.type", string(reviewType)),
+			attribute.String("vote", string(vote)),
+		)
 	}
 
 	// Check for unanimous approval
@@ -455,6 +594,41 @@ Your review should focus on: %s`, taskID, description, reviewType, getReviewFocu
 	errorMsg := ""
 	if !allApproved {
 		errorMsg = aggregator.GetRejectionSummary(votes)
+	}
+
+	// Count votes by type
+	approvals := 0
+	rejections := 0
+	requestChanges := 0
+	for _, vote := range votes {
+		switch vote.Vote {
+		case VoteApprove:
+			approvals++
+		case VoteReject:
+			rejections++
+		case VoteRequestChange:
+			requestChanges++
+		}
+	}
+
+	span.SetAttributes(
+		telemetry.AttrGateName.String("multi_review"),
+		telemetry.AttrGatePassed.Bool(allApproved),
+		attribute.Int("reviews.total", len(votes)),
+		attribute.Int("reviews.approved", approvals),
+		attribute.Int("reviews.rejected", rejections),
+		attribute.Int("reviews.request_change", requestChanges),
+	)
+
+	if allApproved {
+		span.SetStatus(codes.Ok, "all reviewers approved")
+		telemetry.AddEvent(ctx, "gate.passed", telemetry.AttrGateName.String("multi_review"))
+	} else {
+		span.SetStatus(codes.Error, "review not unanimously approved")
+		telemetry.AddEvent(ctx, "gate.failed",
+			telemetry.AttrGateName.String("multi_review"),
+			attribute.Int("rejections", rejections),
+		)
 	}
 
 	return &GateResult{
@@ -469,15 +643,23 @@ Your review should focus on: %s`, taskID, description, reviewType, getReviewFocu
 
 // GetCommitSHA retrieves the current commit SHA
 func (ea *EnhancedActivities) GetCommitSHA(ctx context.Context, bootstrap *BootstrapOutput) (string, error) {
+	ctx, span := telemetry.StartSpan(ctx, "activity.enhanced", "GetCommitSHA")
+	defer span.End()
+
 	cellActivities := NewCellActivities()
 	cell := cellActivities.reconstructCell(bootstrap)
 
 	result, err := cell.Client.ExecuteCommand(ctx, "", "shell", []string{"git", "rev-parse", "HEAD"})
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get commit SHA")
 		return "", fmt.Errorf("failed to get commit SHA: %w", err)
 	}
 
 	sha := strings.TrimSpace(result.GetText())
+	span.SetAttributes(attribute.String("git.commit_sha", sha))
+	span.SetStatus(codes.Ok, "commit SHA retrieved")
+	telemetry.AddEvent(ctx, "commit.sha.retrieved", attribute.String("sha", sha))
 	return sha, nil
 }
 

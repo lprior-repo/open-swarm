@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ import (
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 
+	"open-swarm/internal/telemetry"
 	"open-swarm/internal/temporal"
 	"open-swarm/pkg/dag"
 )
@@ -28,6 +30,36 @@ const (
 
 func main() {
 	log.Println("🚀 Reactor-SDK Temporal Worker v6.1.0")
+
+	// Initialize OpenTelemetry tracing
+	log.Println("🔭 Initializing OpenTelemetry tracing...")
+	ctx := context.Background()
+
+	// Configure telemetry - use environment variables if available
+	config := telemetry.DefaultConfig()
+	if collectorURL := os.Getenv("OTEL_COLLECTOR_URL"); collectorURL != "" {
+		config.CollectorURL = collectorURL
+	}
+	if serviceName := os.Getenv("OTEL_SERVICE_NAME"); serviceName != "" {
+		config.ServiceName = serviceName
+	}
+
+	tracerProvider, err := telemetry.NewTracerProvider(ctx, config)
+	if err != nil {
+		log.Printf("⚠️  Failed to initialize tracing (continuing without): %v", err)
+	} else {
+		log.Printf("✅ OpenTelemetry tracing initialized (collector: http://%s)", config.CollectorURL)
+		defer func() {
+			log.Println("🔭 Shutting down tracing...")
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+				log.Printf("⚠️  Error shutting down tracer provider: %v", err)
+			} else {
+				log.Println("✅ Tracing shutdown complete")
+			}
+		}()
+	}
 
 	// Initialize global infrastructure managers (singleton pattern)
 	log.Println("🔧 Initializing global managers...")

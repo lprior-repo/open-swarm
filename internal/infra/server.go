@@ -9,24 +9,39 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 )
 
 const (
 	// Default health check timeout duration
-	defaultHealthTimeout = 10 * time.Second
+	// Increased from 10s to 30s to handle concurrent server bootstraps
+	// where resource contention can delay startup
+	defaultHealthTimeout = 30 * time.Second
 	// Health check interval duration
-	healthCheckInterval = 200 * time.Millisecond
+	healthCheckInterval = 500 * time.Millisecond
 	// HTTP status code for OK
 	httpStatusOK = 200
 	// Graceful shutdown timeout
 	gracefulShutdownTimeout = 5 * time.Second
 	// HTTP client timeout for health checks
-	healthCheckClientTimeout = 1 * time.Second
+	healthCheckClientTimeout = 2 * time.Second
 	// HTTP client timeout for general requests
 	generalClientTimeout = 2 * time.Second
+	// Settling time after health check succeeds to allow full initialization
+	serverSettlingTime = 2 * time.Second
+	// Maximum number of concurrent server bootstraps
+	// Limits resource contention when starting multiple servers
+	maxConcurrentBootstraps = 4
+)
+
+var (
+	// Global semaphore to limit concurrent server bootstraps
+	bootstrapSemaphore = make(chan struct{}, maxConcurrentBootstraps)
 )
 
 // ServerHandle represents a running opencode server instance
@@ -46,6 +61,7 @@ type ServerManager struct {
 	opencodeCommand string
 	healthTimeout   time.Duration
 	healthInterval  time.Duration
+	mu              sync.Mutex
 }
 
 // NewServerManager creates a new server manager
@@ -82,6 +98,11 @@ func waitForHealth(ctx context.Context, baseURL string, timeout time.Duration, i
 			}
 			resp.Body.Close()
 			if resp.StatusCode == httpStatusOK {
+				// Health endpoint is responding, but OpenCode needs a moment
+				// to fully initialize its session API (ACP server, plugins, etc).
+				// Give it time to complete bootstrap before accepting requests.
+				// Increased from 3s to 5s to handle concurrent server starts.
+				time.Sleep(serverSettlingTime)
 				return nil
 			}
 		}
@@ -97,8 +118,20 @@ func (sm *ServerManager) BootServer(ctx context.Context, worktreePath string, wo
 		return nil, fmt.Errorf("invalid port number: %d", port)
 	}
 
+	// Acquire semaphore to limit concurrent bootstraps
+	// This prevents resource contention when starting multiple servers
+	select {
+	case bootstrapSemaphore <- struct{}{}:
+		// Got semaphore, continue
+		defer func() { <-bootstrapSemaphore }()
+	case <-ctx.Done():
+		return nil, fmt.Errorf("context cancelled while waiting for bootstrap slot: %w", ctx.Err())
+	}
+
 	// 1. Prepare Command: opencode serve --port X --hostname localhost
-	cmd := exec.CommandContext(ctx, sm.opencodeCommand, "serve",
+	// IMPORTANT: Use exec.Command (not CommandContext) so the server process
+	// survives after the activity context is cancelled by Temporal
+	cmd := exec.Command(sm.opencodeCommand, "serve",
 		"--port", fmt.Sprintf("%d", port),
 		"--hostname", "localhost",
 	)
@@ -106,7 +139,31 @@ func (sm *ServerManager) BootServer(ctx context.Context, worktreePath string, wo
 	// Set working directory to worktree (INV-002)
 	cmd.Dir = worktreePath
 
-	// 2. Process Group Configuration (for clean kill)
+	// 2. Setup logging for diagnostics
+	// Create logs directory if it doesn't exist
+	logsDir := filepath.Join(worktreePath, ".opencode-logs")
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create logs directory: %w", err)
+	}
+
+	// Create log files for stdout and stderr
+	stdoutLog, err := os.Create(filepath.Join(logsDir, fmt.Sprintf("server-%d.stdout.log", port)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdout log: %w", err)
+	}
+	stderrLog, err := os.Create(filepath.Join(logsDir, fmt.Sprintf("server-%d.stderr.log", port)))
+	if err != nil {
+		stdoutLog.Close()
+		return nil, fmt.Errorf("failed to create stderr log: %w", err)
+	}
+
+	// Redirect server output to log files
+	// Note: We do NOT capture stdout/stderr directly as that breaks OpenCode's ACP protocol
+	// Instead, we redirect to files which the server can still write to
+	cmd.Stdout = stdoutLog
+	cmd.Stderr = stderrLog
+
+	// 3. Process Group Configuration (for clean kill)
 	// This allows us to kill the entire process tree
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
@@ -114,17 +171,24 @@ func (sm *ServerManager) BootServer(ctx context.Context, worktreePath string, wo
 
 	// Start the server process
 	if err := cmd.Start(); err != nil {
+		stdoutLog.Close()
+		stderrLog.Close()
 		return nil, fmt.Errorf("failed to start opencode serve: %w", err)
 	}
 
 	pid := cmd.Process.Pid
 	baseURL := fmt.Sprintf("http://localhost:%d", port)
 
-	// 3. Healthcheck (INV-003)
+	// Close log file handles - the process keeps them open
+	// We close our handles so we don't leak file descriptors
+	stdoutLog.Close()
+	stderrLog.Close()
+
+	// 4. Healthcheck (INV-003)
 	// Wait for the server to become ready before returning
 	if err := waitForHealth(ctx, baseURL, sm.healthTimeout, sm.healthInterval); err != nil {
 		_ = sm.killProcess(cmd)
-		return nil, fmt.Errorf("opencode server on port %d failed to become ready: %w", port, err)
+		return nil, fmt.Errorf("opencode server on port %d failed to become ready (check logs at %s): %w", port, logsDir, err)
 	}
 
 	return &ServerHandle{
@@ -145,6 +209,31 @@ func (sm *ServerManager) Shutdown(handle *ServerHandle) error {
 	}
 
 	return sm.killProcess(handle.Cmd)
+}
+
+// ShutdownByPID stops the opencode server using only the PID
+// This is used when the Cmd object is not available (e.g., after Temporal serialization)
+func (sm *ServerManager) ShutdownByPID(pid int) error {
+	if pid <= 0 {
+		return fmt.Errorf("invalid PID: %d", pid)
+	}
+
+	// Try to get the process group ID
+	pgid, err := syscall.Getpgid(pid)
+	if err != nil {
+		// Process might already be dead, that's OK
+		return nil
+	}
+
+	// Send SIGTERM to process group first for graceful shutdown
+	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
+		// If SIGTERM fails, use SIGKILL
+		if killErr := syscall.Kill(-pgid, syscall.SIGKILL); killErr != nil {
+			return fmt.Errorf("failed to kill process group %d: %w", pgid, killErr)
+		}
+	}
+
+	return nil
 }
 
 // killProcess terminates the process and its entire process group

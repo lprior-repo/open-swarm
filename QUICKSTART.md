@@ -48,13 +48,26 @@ This will:
   -prompt "Implement FizzBuzz"
 ```
 
-### 3. Monitor Progress
+### 3. Start Observability (Optional but Recommended)
+
+```bash
+# Start OpenTelemetry tracing stack
+./scripts/start-observability.sh
+```
+
+This provides:
+- **Jaeger UI** (traces): http://localhost:16686
+- **Grafana** (dashboards): http://localhost:3001
+- **Prometheus** (metrics): http://localhost:9090
+
+### 4. Monitor Progress
 
 - **Temporal UI**: http://localhost:8081
 - **Worker logs**: `tail -f worker.log`
 - **OpenCode logs**: `tail -f opencode.log`
+- **Traces**: http://localhost:16686 (if observability started)
 
-### 4. Stop Everything (Fully Automated)
+### 5. Stop Everything (Fully Automated)
 
 ```bash
 ./scripts/stop-benchmark-infra.sh
@@ -67,6 +80,11 @@ This will:
 - Clean up zombie processes
 - Remove temporary git branches
 - Clean up PID files
+
+```bash
+# Stop observability stack (if started)
+docker-compose -f docker-compose.otel.yml down
+```
 
 ## Architecture (Simplified)
 
@@ -247,8 +265,74 @@ pkill -9 temporal-worker
 - Timeouts are set to 2 minutes
 - If timing out, increase in workflow files
 
+## OpenTelemetry Tracing 🔭
+
+### Quick Start
+
+```bash
+# Start observability stack
+./scripts/start-observability.sh
+
+# Run worker with tracing
+./bin/temporal-worker
+
+# Run benchmarks to generate traces
+./bin/simple-benchmark -strategy enhanced -runs 1 -prompt "Your task"
+
+# View traces in Jaeger
+open http://localhost:16686
+```
+
+### What's Traced
+
+All operations are instrumented with OpenTelemetry:
+
+- **OpenCode SDK calls**: ExecutePrompt, ExecuteCommand, session management
+- **Temporal activities**: All workflow activities with full context
+- **TCR Gates**: GenTest, LintTest, VerifyRED, GenImpl, VerifyGREEN, MultiReview
+- **Git operations**: Branch creation, commits, test runs
+
+### Viewing Traces
+
+1. Open **Jaeger UI**: http://localhost:16686
+2. Select service: `open-swarm`
+3. Search for traces by:
+   - Operation name (e.g., `ExecuteGenTest`, `ExecutePrompt`)
+   - Tags (e.g., `tcr.gate_name=verify_green`)
+   - Duration (e.g., min duration: `30s`)
+4. Click on a trace to see:
+   - Complete timeline of all operations
+   - Span attributes and events
+   - Error details
+   - Parent-child relationships
+
+### Common Queries
+
+**Find slow prompts:**
+- Service: `open-swarm`
+- Operation: `ExecutePrompt`
+- Min Duration: `30s`
+
+**Find failed gates:**
+- Service: `open-swarm`
+- Tags: `tcr.gate_passed=false`
+
+**Trace specific workflow:**
+- Tags: `workflow.id=simple-bench-basic-1234567890-1`
+
+### Documentation
+
+See **TELEMETRY.md** for complete documentation including:
+- Architecture overview
+- Configuration options
+- Custom instrumentation
+- Troubleshooting guide
+- Advanced queries
+
 ## Success! 🎉
 
 The infrastructure is fully automated and working. The remaining task is to configure OpenCode to actually write files to disk, which is a configuration/API usage issue rather than an architectural problem.
 
 All the complex worktree/cell/server management has been removed, making the system much simpler to debug and maintain.
+
+**New**: Full OpenTelemetry tracing provides deep visibility into all operations, making debugging and performance analysis much easier.

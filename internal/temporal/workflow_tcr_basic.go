@@ -68,7 +68,14 @@ func TCRWorkflow(ctx workflow.Context, input TCRWorkflowInput) (*TCRWorkflowResu
 		Prompt:      input.Prompt,
 	}).Get(ctx, &execResult)
 
-	if err != nil || !execResult.Success {
+	if err != nil {
+		return &TCRWorkflowResult{
+			Success: false,
+			Error:   fmt.Sprintf("task execution failed: %v", err),
+		}, nil
+	}
+
+	if !execResult.Success {
 		return &TCRWorkflowResult{
 			Success: false,
 			Error:   execResult.ErrorMessage,

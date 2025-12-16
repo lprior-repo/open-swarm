@@ -112,8 +112,16 @@ func (a *Activities) TeardownCell(_ context.Context, cell *CellBootstrap) error 
 
 	// 1. Shutdown Server (INV-005)
 	if cell.ServerHandle != nil {
-		if err := a.serverManager.Shutdown(cell.ServerHandle); err != nil {
-			errs = append(errs, fmt.Errorf("failed to shutdown server: %w", err))
+		// Try normal shutdown first (if we have the Cmd object)
+		if cell.ServerHandle.Cmd != nil {
+			if err := a.serverManager.Shutdown(cell.ServerHandle); err != nil {
+				errs = append(errs, fmt.Errorf("failed to shutdown server: %w", err))
+			}
+		} else if cell.ServerHandle.PID != 0 {
+			// Fallback to PID-based shutdown (after serialization)
+			if err := a.serverManager.ShutdownByPID(cell.ServerHandle.PID); err != nil {
+				errs = append(errs, fmt.Errorf("failed to shutdown server by PID: %w", err))
+			}
 		}
 	}
 
@@ -188,8 +196,11 @@ func (a *Activities) ExecuteTask(ctx context.Context, cell *CellBootstrap, task 
 
 // RunTests executes tests in the cell
 func (a *Activities) RunTests(ctx context.Context, cell *CellBootstrap) (bool, error) {
-	// Execute test command via shell
-	result, err := cell.Client.ExecuteCommand(ctx, "", "shell", []string{"go", "test", "./..."})
+	// Execute test command via prompt (creates session automatically)
+	result, err := cell.Client.ExecutePrompt(ctx, "Run: go test ./...", &agent.PromptOptions{
+		Title: "Run Tests",
+		Agent: "build",
+	})
 	if err != nil {
 		return false, fmt.Errorf("failed to execute tests: %w", err)
 	}
@@ -203,17 +214,14 @@ func (a *Activities) RunTests(ctx context.Context, cell *CellBootstrap) (bool, e
 
 // CommitChanges commits changes in the worktree
 func (a *Activities) CommitChanges(ctx context.Context, cell *CellBootstrap, message string) error {
-	// Execute git commands via shell
-	commands := [][]string{
-		{"git", "add", "."},
-		{"git", "commit", "-m", message},
-	}
-
-	for _, cmd := range commands {
-		_, err := cell.Client.ExecuteCommand(ctx, "", "shell", cmd)
-		if err != nil {
-			return fmt.Errorf("failed to execute git command %v: %w", cmd, err)
-		}
+	// Execute git commands via prompt
+	prompt := fmt.Sprintf("Run these git commands:\ngit add .\ngit commit -m \"%s\"", message)
+	_, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
+		Title: "Commit Changes",
+		Agent: "build",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 
 	return nil
@@ -221,7 +229,11 @@ func (a *Activities) CommitChanges(ctx context.Context, cell *CellBootstrap, mes
 
 // RevertChanges reverts all changes in the worktree
 func (a *Activities) RevertChanges(ctx context.Context, cell *CellBootstrap) error {
-	_, err := cell.Client.ExecuteCommand(ctx, "", "shell", []string{"git", "reset", "--hard", "HEAD"})
+	// Execute git reset via prompt
+	_, err := cell.Client.ExecutePrompt(ctx, "Run: git reset --hard", &agent.PromptOptions{
+		Title: "Revert Changes",
+		Agent: "build",
+	})
 	if err != nil {
 		return fmt.Errorf("failed to revert changes: %w", err)
 	}

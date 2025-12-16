@@ -35,6 +35,9 @@ type ServerManagerInterface interface {
 	// Shutdown gracefully stops the opencode server
 	Shutdown(handle *ServerHandle) error
 
+	// ShutdownByPID stops the opencode server using only the PID
+	ShutdownByPID(pid int) error
+
 	// IsHealthy checks if the server is still responsive
 	IsHealthy(ctx context.Context, handle *ServerHandle) bool
 }
