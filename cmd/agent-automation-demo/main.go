@@ -13,7 +13,7 @@ import (
 
 	"go.temporal.io/sdk/client"
 
-	"open-swarm/internal/temporal"
+	"open-swarm/pkg/dag"
 )
 
 func main() {
@@ -81,7 +81,7 @@ func main() {
 func runBuildPipeline(ctx context.Context, c client.Client) {
 	workflowID := fmt.Sprintf("ai-build-pipeline-%d", time.Now().Unix())
 
-	tasks := []temporal.Task{
+	tasks := []dag.Task{
 		// Setup phase
 		{
 			Name:    "init-workspace",
@@ -136,7 +136,7 @@ func runBuildPipeline(ctx context.Context, c client.Client) {
 		},
 	}
 
-	input := temporal.DAGWorkflowInput{
+	input := dag.WorkflowInput{
 		WorkflowID: workflowID,
 		Branch:     "main",
 		Tasks:      tasks,
@@ -147,7 +147,7 @@ func runBuildPipeline(ctx context.Context, c client.Client) {
 		TaskQueue: "open-swarm-demo",
 	}
 
-	we, err := c.ExecuteWorkflow(ctx, workflowOptions, temporal.TddDagWorkflow, input)
+	we, err := c.ExecuteWorkflow(ctx, workflowOptions, dag.TddDagWorkflow, input)
 	if err != nil {
 		log.Printf("❌ Failed to start build pipeline: %v", err)
 		return
@@ -181,7 +181,7 @@ func runBuildPipeline(ctx context.Context, c client.Client) {
 func runMultiAgentFeature(ctx context.Context, c client.Client) {
 	workflowID := fmt.Sprintf("multi-agent-feature-%d", time.Now().Unix())
 
-	tasks := []temporal.Task{
+	tasks := []dag.Task{
 		// Design phase
 		{
 			Name:    "design-architecture",
@@ -226,7 +226,7 @@ func runMultiAgentFeature(ctx context.Context, c client.Client) {
 		},
 	}
 
-	input := temporal.DAGWorkflowInput{
+	input := dag.WorkflowInput{
 		WorkflowID: workflowID,
 		Branch:     "feature/user-management",
 		Tasks:      tasks,
@@ -237,7 +237,7 @@ func runMultiAgentFeature(ctx context.Context, c client.Client) {
 		TaskQueue: "open-swarm-demo",
 	}
 
-	we, err := c.ExecuteWorkflow(ctx, workflowOptions, temporal.TddDagWorkflow, input)
+	we, err := c.ExecuteWorkflow(ctx, workflowOptions, dag.TddDagWorkflow, input)
 	if err != nil {
 		log.Printf("❌ Failed to start multi-agent feature: %v", err)
 		return
@@ -271,7 +271,7 @@ func runTDDWorkflow(ctx context.Context, c client.Client) {
 	workflowID := fmt.Sprintf("tdd-agent-%d", time.Now().Unix())
 
 	// Simulate TDD cycle: Write test → Run (RED) → Implement → Run (GREEN) → Refactor
-	tasks := []temporal.Task{
+	tasks := []dag.Task{
 		{
 			Name:    "write-test",
 			Command: "echo '📝 [Agent] Writing test case...' && sleep 2",
@@ -304,7 +304,7 @@ func runTDDWorkflow(ctx context.Context, c client.Client) {
 		},
 	}
 
-	input := temporal.DAGWorkflowInput{
+	input := dag.WorkflowInput{
 		WorkflowID: workflowID,
 		Branch:     "feature/tdd-example",
 		Tasks:      tasks,
@@ -315,7 +315,7 @@ func runTDDWorkflow(ctx context.Context, c client.Client) {
 		TaskQueue: "open-swarm-demo",
 	}
 
-	we, err := c.ExecuteWorkflow(ctx, workflowOptions, temporal.TddDagWorkflow, input)
+	we, err := c.ExecuteWorkflow(ctx, workflowOptions, dag.TddDagWorkflow, input)
 	if err != nil {
 		log.Printf("❌ Failed to start TDD workflow: %v", err)
 		return

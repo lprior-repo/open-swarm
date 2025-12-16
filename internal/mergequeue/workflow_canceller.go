@@ -105,11 +105,11 @@ type DefaultWorkflowCanceller struct {
 // NewDefaultWorkflowCanceller creates a new WorkflowCanceller with a Temporal client.
 func NewDefaultWorkflowCanceller(tc client.Client, gracefulTimeout, forceTimeout time.Duration) *DefaultWorkflowCanceller {
 	return &DefaultWorkflowCanceller{
-		client:                   tc,
-		gracefulTimeout:          gracefulTimeout,
-		forceTimeout:             forceTimeout,
-		statusCache:              make(map[string]*CancellationStatus),
-		pendingCancellations:     make(map[string]context.CancelFunc),
+		client:               tc,
+		gracefulTimeout:      gracefulTimeout,
+		forceTimeout:         forceTimeout,
+		statusCache:          make(map[string]*CancellationStatus),
+		pendingCancellations: make(map[string]context.CancelFunc),
 	}
 }
 
@@ -147,9 +147,9 @@ func (dwc *DefaultWorkflowCanceller) CancelWorkflow(ctx context.Context, workflo
 
 	startTime := time.Now()
 	status := &CancellationStatus{
-		WorkflowID:  workflowID,
-		Mode:        mode,
-		CancelledAt: startTime,
+		WorkflowID:     workflowID,
+		Mode:           mode,
+		CancelledAt:    startTime,
 		ResourcesFreed: []string{},
 	}
 
@@ -214,7 +214,7 @@ func (dwc *DefaultWorkflowCanceller) CancelWorkflows(ctx context.Context, workfl
 		go func(id string) {
 			defer wg.Done()
 
-			sem <- struct{}{} // Acquire semaphore
+			sem <- struct{}{}        // Acquire semaphore
 			defer func() { <-sem }() // Release semaphore
 
 			status, err := dwc.CancelWorkflow(ctx, id, mode)

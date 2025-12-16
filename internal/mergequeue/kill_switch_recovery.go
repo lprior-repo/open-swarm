@@ -44,10 +44,10 @@ func NewRetryStrategy(branchID, reason string, config RetryConfig) *RetryStrateg
 	return &RetryStrategy{
 		config: config,
 		state: KillOperationState{
-			BranchID:      branchID,
-			StartTime:     time.Now(),
+			BranchID:       branchID,
+			StartTime:      time.Now(),
 			CompletedSteps: []string{},
-			KillReason:    reason,
+			KillReason:     reason,
 		},
 	}
 }
@@ -268,8 +268,8 @@ type CascadeKillValidator struct {
 // NewCascadeKillValidator creates a new cascade validator
 func NewCascadeKillValidator(maxDepth, maxBranches int) *CascadeKillValidator {
 	return &CascadeKillValidator{
-		MaxDepth:             maxDepth,
-		ProcessingBranches:   make(map[string]bool),
+		MaxDepth:              maxDepth,
+		ProcessingBranches:    make(map[string]bool),
 		MaxBranchesPerCascade: maxBranches,
 	}
 }

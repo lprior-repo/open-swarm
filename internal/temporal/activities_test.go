@@ -547,17 +547,16 @@ func TestActivityFieldTypes(t *testing.T) {
 	})
 }
 
-
 // TestExecuteTestActivity tests the test execution activity wrapper
 func TestExecuteTestActivity(t *testing.T) {
 	tests := []struct {
-		name           string
-		pattern        string
-		timeout        int64 // in seconds
-		race           bool
-		coverage       bool
-		expectValid    bool
-		verifyOutput   func(t *testing.T, result *TestResult)
+		name         string
+		pattern      string
+		timeout      int64 // in seconds
+		race         bool
+		coverage     bool
+		expectValid  bool
+		verifyOutput func(t *testing.T, result *TestResult)
 	}{
 		{
 			name:        "basic test execution",

@@ -377,7 +377,7 @@ func TestTestGenerationBuilder_WithCodeContext(t *testing.T) {
 
 func TestTestGenerationBuilder_WithCoverageReport(t *testing.T) {
 	report := &CoverageReport{
-		TotalCoverage: 75.5,
+		TotalCoverage:      75.5,
 		UncoveredFunctions: []string{"Helper", "Cleanup"},
 	}
 
@@ -400,7 +400,6 @@ func TestTestGenerationBuilder_WithCoverageReport(t *testing.T) {
 	}
 }
 
-
 func TestTestGenerationPromptBuilder_ConditionalLintFeedback(t *testing.T) {
 	t.Run("WithLintFeedback", func(t *testing.T) {
 		request := &TestGenerationRequest{
@@ -410,8 +409,8 @@ func TestTestGenerationPromptBuilder_ConditionalLintFeedback(t *testing.T) {
 			Language:        "Go",
 			TestFramework:   "testing",
 			LintFeedback: &LintFeedback{
-				Summary: "Lint issues found",
-				Errors:  []string{"Error 1"},
+				Summary:  "Lint issues found",
+				Errors:   []string{"Error 1"},
 				Warnings: []string{"Warning 1"},
 			},
 		}

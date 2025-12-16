@@ -324,11 +324,11 @@ type TestGenerationBuilder struct {
 func NewTestGenerationBuilder() *TestGenerationBuilder {
 	return &TestGenerationBuilder{
 		request: &TestGenerationRequest{
-			Mode:           TestModeInitial,
-			Language:       "Go",
-			TestFramework:  "testing",
+			Mode:               TestModeInitial,
+			Language:           "Go",
+			TestFramework:      "testing",
 			AcceptanceCriteria: &TestGenerationCriteria{},
-			GeneratedAt:    time.Now(),
+			GeneratedAt:        time.Now(),
 		},
 	}
 }

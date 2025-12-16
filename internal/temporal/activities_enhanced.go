@@ -15,6 +15,7 @@ import (
 
 	"open-swarm/internal/agent"
 	"open-swarm/internal/filelock"
+	"open-swarm/internal/workflow"
 )
 
 // EnhancedActivities contains activities for Enhanced TCR workflow
@@ -42,7 +43,7 @@ func newFailedGateResult(gateName string, err error, startTime time.Time) *GateR
 
 // getChangedFiles extracts file paths from agent file status.
 // Returns a slice of non-empty file paths that were modified.
-func getChangedFiles(ctx context.Context, cell *agent.Cell) []string {
+func getChangedFiles(ctx context.Context, cell *workflow.CellBootstrap) []string {
 	fileStatus, _ := cell.Client.GetFileStatus(ctx)
 	filesChanged := make([]string, 0, len(fileStatus))
 	for _, file := range fileStatus {

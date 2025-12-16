@@ -114,9 +114,9 @@ type FileWriteInput struct {
 
 // FileWriteOutput contains the result of a file write operation
 type FileWriteOutput struct {
-	Path      string // Path to the written file
+	Path         string // Path to the written file
 	BytesWritten int64  // Number of bytes written
-	Created   bool   // Whether the file was newly created
+	Created      bool   // Whether the file was newly created
 }
 
 // FileWrite writes content to a file
@@ -166,9 +166,9 @@ func (fa *FileActivities) FileWrite(ctx context.Context, input FileWriteInput) (
 	}
 
 	result := &FileWriteOutput{
-		Path:      input.Path,
+		Path:         input.Path,
 		BytesWritten: int64(n),
-		Created:   created,
+		Created:      created,
 	}
 
 	logger.Info("File written successfully", "bytes", result.BytesWritten, "created", result.Created)
@@ -504,9 +504,9 @@ type FileExistsInput struct {
 
 // FileExistsOutput contains the result of an existence check
 type FileExistsOutput struct {
-	Exists bool   // Whether the path exists
-	IsDir  bool   // Whether it's a directory (false if doesn't exist)
-	Size   int64  // File size (0 if doesn't exist or is directory)
+	Exists bool  // Whether the path exists
+	IsDir  bool  // Whether it's a directory (false if doesn't exist)
+	Size   int64 // File size (0 if doesn't exist or is directory)
 }
 
 // FileExists checks if a file or directory exists

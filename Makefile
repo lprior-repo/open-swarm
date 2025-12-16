@@ -206,7 +206,9 @@ clean:
 # Format code
 fmt:
 	@echo "Formatting code..."
-	@$(GO) fmt ./...
+	@for dir in $(shell go list -f '{{.Dir}}' ./... | grep -v /vendor/); do \
+		go fmt "$$dir"; \
+	done
 	@echo "✓ Code formatted"
 
 # Install development tools

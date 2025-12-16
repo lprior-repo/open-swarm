@@ -87,7 +87,7 @@ func parseFlags() (string, string, string, int, string, string, string) {
 		taskID       = flag.String("task", "", "Task ID to execute")
 		taskDesc     = flag.String("desc", "", "Task description")
 		taskPrompt   = flag.String("prompt", "", "Task prompt")
-		_ = flag.Bool("parallel", false, "Run tasks in parallel mode (not yet implemented)")
+		_            = flag.Bool("parallel", false, "Run tasks in parallel mode (not yet implemented)")
 	)
 	flag.Parse()
 	return *repoDir, *worktreeBase, *branch, *maxAgents, *taskID, *taskDesc, *taskPrompt

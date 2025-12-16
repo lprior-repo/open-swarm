@@ -172,11 +172,11 @@ FAIL	github.com/example/pkg	0.123s`
 		testNames = append(testNames, f.TestName)
 	}
 
-	if !contains(testNames, "TestFoo") {
+	if !testContains(testNames, "TestFoo") {
 		t.Errorf("Expected to find TestFoo in failures")
 	}
 
-	if !contains(testNames, "TestBar") {
+	if !testContains(testNames, "TestBar") {
 		t.Errorf("Expected to find TestBar in failures")
 	}
 }
@@ -347,7 +347,7 @@ func TestGetRawFailures(t *testing.T) {
 }
 
 // Helper function
-func contains(slice []string, item string) bool {
+func testContains(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {
 			return true

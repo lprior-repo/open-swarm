@@ -163,7 +163,7 @@ func TestKillFailedBranch_Success(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill the branch
-	err := coord.killFailedBranch(ctx, "branch-1", "test failure")
+	err := coord.KillFailedBranchWithValidation(ctx, "branch-1", "test failure")
 	require.NoError(t, err)
 
 	// Verify branch was killed
@@ -185,7 +185,7 @@ func TestKillFailedBranch_NonExistentBranch(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Try to kill a non-existent branch
-	err := coord.killFailedBranch(ctx, "non-existent", "test failure")
+	err := coord.KillFailedBranchWithValidation(ctx, "non-existent", "test failure")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "branch non-existent not found")
 }
@@ -210,7 +210,7 @@ func TestKillFailedBranch_Idempotent(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Try to kill it again
-	err := coord.killFailedBranch(ctx, "branch-1", "new failure")
+	err := coord.KillFailedBranchWithValidation(ctx, "branch-1", "new failure")
 	require.NoError(t, err)
 
 	// Verify the original kill data is preserved
@@ -251,7 +251,7 @@ func TestKillFailedBranch_DifferentStatuses(t *testing.T) {
 			coord.mu.Unlock()
 
 			beforeKill := time.Now()
-			err := coord.killFailedBranch(ctx, "branch-1", "cascade kill")
+			err := coord.KillFailedBranchWithValidation(ctx, "branch-1", "cascade kill")
 			afterKill := time.Now()
 
 			require.NoError(t, err)
@@ -291,7 +291,7 @@ func TestKillFailedBranch_PreservesOtherBranches(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill only branch-1
-	err := coord.killFailedBranch(ctx, "branch-1", "test failure")
+	err := coord.KillFailedBranchWithValidation(ctx, "branch-1", "test failure")
 	require.NoError(t, err)
 
 	// Verify branch-1 is killed but branch-2 is untouched

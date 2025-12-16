@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"open-swarm/internal/temporal"
+	"open-swarm/pkg/dag"
 )
 
 // Task represents a Beads task from .beads/issues.jsonl
@@ -73,19 +73,19 @@ func GetDependencies(taskID string) ([]string, error) {
 }
 
 // BuildDAG converts a Beads task and dependencies into a Temporal DAG workflow input
-func BuildDAG(taskID string) (*temporal.DAGWorkflowInput, error) {
+func BuildDAG(taskID string) (*dag.WorkflowInput, error) {
 	_, err := GetTask(taskID)
 	if err != nil {
 		return nil, err
 	}
 
-	input := &temporal.DAGWorkflowInput{
+	input := &dag.WorkflowInput{
 		WorkflowID: taskID,
-		Tasks:      []temporal.Task{},
+		Tasks:      []dag.Task{},
 	}
 
 	visited := make(map[string]bool)
-	taskMap := make(map[string]temporal.Task)
+	taskMap := make(map[string]dag.Task)
 
 	if err := buildDAGRecursive(taskID, visited, taskMap); err != nil {
 		return nil, err
@@ -98,7 +98,7 @@ func BuildDAG(taskID string) (*temporal.DAGWorkflowInput, error) {
 }
 
 // buildDAGRecursive recursively builds the DAG by traversing dependencies
-func buildDAGRecursive(taskID string, visited map[string]bool, taskMap map[string]temporal.Task) error {
+func buildDAGRecursive(taskID string, visited map[string]bool, taskMap map[string]dag.Task) error {
 	if visited[taskID] {
 		return nil
 	}
@@ -120,7 +120,7 @@ func buildDAGRecursive(taskID string, visited map[string]bool, taskMap map[strin
 		return err
 	}
 
-	taskMap[task.ID] = temporal.Task{
+	taskMap[task.ID] = dag.Task{
 		Name:    task.ID,
 		Command: prompt,
 		Deps:    deps,
@@ -137,7 +137,7 @@ func buildDAGRecursive(taskID string, visited map[string]bool, taskMap map[strin
 }
 
 // ReadTaskDAG reads a task and dependencies from Beads, returning a DAG workflow input
-func ReadTaskDAG(taskID string) (*temporal.DAGWorkflowInput, error) {
+func ReadTaskDAG(taskID string) (*dag.WorkflowInput, error) {
 	return BuildDAG(taskID)
 }
 

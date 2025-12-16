@@ -37,7 +37,7 @@ func TestKillFailedBranchWithValidation_Success(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill with validation should succeed
-	err := coord.KillFailedBranchWithValidation(ctx, "feature-branch", "test failure", "agent-1")
+	err := coord.KillFailedBranchWithValidation(ctx, "feature-branch", "test failure")
 	require.Nil(t, err, "Kill should succeed with valid prerequisites")
 
 	// Verify branch was killed
@@ -72,7 +72,7 @@ func TestKillFailedBranchWithValidation_ProtectedBranch(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill should fail due to protection
-	err := coord.KillFailedBranchWithValidation(ctx, "main", "test failure", "agent-1")
+	err := coord.KillFailedBranchWithValidation(ctx, "main", "test failure")
 	require.NotNil(t, err)
 	assert.Equal(t, ValidationCodeBranchProtected, err.Code)
 	assert.Contains(t, err.Message, "protected")
@@ -96,7 +96,7 @@ func TestKillFailedBranchWithValidation_BranchNotFound(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill non-existent branch should fail
-	err := coord.KillFailedBranchWithValidation(ctx, "non-existent", "test failure", "agent-1")
+	err := coord.KillFailedBranchWithValidation(ctx, "non-existent", "test failure")
 	require.NotNil(t, err)
 	assert.Equal(t, ValidationCodeBranchNotFound, err.Code)
 }
@@ -123,7 +123,7 @@ func TestKillFailedBranchWithValidation_OwnershipMismatch(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Try to kill as agent-2 (different owner)
-	err := coord.KillFailedBranchWithValidation(ctx, "feature-branch", "test failure", "agent-2")
+	err := coord.KillFailedBranchWithValidation(ctx, "feature-branch", "test failure")
 	require.NotNil(t, err)
 	assert.Equal(t, ValidationCodeOwnershipMismatch, err.Code)
 
@@ -157,7 +157,7 @@ func TestKillFailedBranchWithValidation_SystemAgentCanKillAny(t *testing.T) {
 	coord.mu.Unlock()
 
 	// System agent can kill any branch
-	err := coord.KillFailedBranchWithValidation(ctx, "feature-branch", "test failure", "system")
+	err := coord.KillFailedBranchWithValidation(ctx, "feature-branch", "test failure")
 	require.Nil(t, err, "System agent should be able to kill any branch")
 
 	// Verify branch was killed
@@ -191,7 +191,7 @@ func TestKillFailedBranchWithValidation_PendingWork(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill should fail due to pending work
-	err := coord.KillFailedBranchWithValidation(ctx, "feature-branch", "test failure", "agent-1")
+	err := coord.KillFailedBranchWithValidation(ctx, "feature-branch", "test failure")
 	require.NotNil(t, err)
 	assert.Equal(t, ValidationCodePendingWork, err.Code)
 
@@ -238,7 +238,7 @@ func TestKillDependentBranchesWithValidation_Success(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill dependents with validation should succeed
-	validationErr, cascadeErr := coord.KillDependentBranchesWithValidation(ctx, "parent", "agent-1")
+	validationErr, cascadeErr := coord.KillDependentBranchesWithValidation(ctx, "parent")
 	require.Nil(t, validationErr, "Validation should pass")
 	require.Nil(t, cascadeErr, "Cascade should succeed")
 
@@ -281,7 +281,7 @@ func TestKillDependentBranchesWithValidation_ParentProtected(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill dependents should fail validation
-	validationErr, cascadeErr := coord.KillDependentBranchesWithValidation(ctx, "main", "agent-1")
+	validationErr, cascadeErr := coord.KillDependentBranchesWithValidation(ctx, "main")
 	require.NotNil(t, validationErr, "Validation should fail")
 	require.Nil(t, cascadeErr, "Cascade should not run")
 	assert.Equal(t, ValidationCodeBranchProtected, validationErr.Code)
@@ -304,7 +304,7 @@ func TestKillDependentBranchesWithValidation_ParentNotFound(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill dependents of non-existent parent should fail
-	validationErr, cascadeErr := coord.KillDependentBranchesWithValidation(ctx, "non-existent", "agent-1")
+	validationErr, cascadeErr := coord.KillDependentBranchesWithValidation(ctx, "non-existent")
 	require.NotNil(t, validationErr, "Validation should fail")
 	require.Nil(t, cascadeErr, "Cascade should not run")
 	assert.Equal(t, ValidationCodeBranchNotFound, validationErr.Code)

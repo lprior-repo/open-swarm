@@ -42,7 +42,7 @@ func TestKillDependentBranches_ThreeLevelHierarchy(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill dependents of root
-	err := coord.killDependentBranches(ctx, "root")
+	err := coord.KillDependentBranchesWithValidation(ctx, "root")
 	require.NoError(t, err)
 
 	// Verify entire hierarchy was killed recursively
@@ -98,7 +98,7 @@ func TestKillDependentBranches_FourLevelHierarchy(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill dependents of level0
-	err := coord.killDependentBranches(ctx, "level0")
+	err := coord.KillDependentBranchesWithValidation(ctx, "level0")
 	require.NoError(t, err)
 
 	// Verify entire 4-level hierarchy was killed recursively
@@ -158,7 +158,7 @@ func TestKillDependentBranches_FiveLevelHierarchy(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill dependents of level0
-	err := coord.killDependentBranches(ctx, "level0")
+	err := coord.KillDependentBranchesWithValidation(ctx, "level0")
 	require.NoError(t, err)
 
 	// Verify entire 5-level hierarchy was killed recursively
@@ -244,7 +244,7 @@ func TestKillDependentBranches_ComplexTreeStructure(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill dependents of root
-	err := coord.killDependentBranches(ctx, "root")
+	err := coord.KillDependentBranchesWithValidation(ctx, "root")
 	require.NoError(t, err)
 
 	// Verify entire tree was killed
@@ -312,7 +312,7 @@ func TestKillDependentBranches_PartialTreeKill(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill dependents of child1 (not root)
-	err := coord.killDependentBranches(ctx, "child1")
+	err := coord.KillDependentBranchesWithValidation(ctx, "child1")
 	require.NoError(t, err)
 
 	// Verify only child1's descendants were killed
@@ -389,7 +389,7 @@ func TestKillDependentBranches_DeepAsymmetricTree(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill dependents of root
-	err := coord.killDependentBranches(ctx, "root")
+	err := coord.KillDependentBranchesWithValidation(ctx, "root")
 	require.NoError(t, err)
 
 	// Verify entire asymmetric tree was killed
@@ -447,7 +447,7 @@ func TestKillDependentBranches_MixedStatuses(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill dependents of parent
-	err := coord.killDependentBranches(ctx, "parent")
+	err := coord.KillDependentBranchesWithValidation(ctx, "parent")
 	require.NoError(t, err)
 
 	// Verify all children are killed regardless of initial status
@@ -487,7 +487,7 @@ func TestKillDependentBranches_SevenLevelHierarchy(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill dependents of level0
-	err := coord.killDependentBranches(ctx, "level0")
+	err := coord.KillDependentBranchesWithValidation(ctx, "level0")
 	require.NoError(t, err)
 
 	// Verify entire 7-level hierarchy was killed recursively

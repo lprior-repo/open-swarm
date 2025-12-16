@@ -168,8 +168,8 @@ func (c *Coordinator) KillFailedBranchWithWorkflow(ctx context.Context, branchID
 	workflowID := branch.WorkflowID
 	c.mu.RUnlock()
 
-	// Call the original killFailedBranch
-	if err := c.killFailedBranch(ctx, branchID, reason); err != nil {
+	// Call the original KillFailedBranchWithValidation
+	if err := c.KillFailedBranchWithValidation(ctx, branchID, reason); err != nil {
 		return err
 	}
 

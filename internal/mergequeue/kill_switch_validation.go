@@ -252,11 +252,11 @@ func (v *KillSwitchValidator) ValidateOwnership(branch *SpeculativeBranch, reque
 //
 // This is the primary validation entry point that should be called before any kill operation.
 // It validates in order:
-//   1. Branch exists
-//   2. Branch is not protected
-//   3. Branch has valid status
-//   4. Branch has no pending work
-//   5. Requesting agent owns the branch
+//  1. Branch exists
+//  2. Branch is not protected
+//  3. Branch has valid status
+//  4. Branch has no pending work
+//  5. Requesting agent owns the branch
 //
 // Returns nil if all validations pass, or the first validation error encountered
 func (v *KillSwitchValidator) ValidateFullKillSwitchPrerequisites(
@@ -294,27 +294,27 @@ func (v *KillSwitchValidator) ValidateFullKillSwitchPrerequisites(
 
 // BranchHealthReport provides a detailed status report for a branch
 type BranchHealthReport struct {
-	BranchID       string
-	Status         BranchStatus
-	IsKilled       bool
-	IsProtected    bool
-	HasPendingWork bool
-	Owner          string
-	CreatedAt      time.Time
-	KilledAt       *time.Time
-	KillReason     string
+	BranchID         string
+	Status           BranchStatus
+	IsKilled         bool
+	IsProtected      bool
+	HasPendingWork   bool
+	Owner            string
+	CreatedAt        time.Time
+	KilledAt         *time.Time
+	KillReason       string
 	ValidationIssues []string
-	CanBeKilled    bool
+	CanBeKilled      bool
 }
 
 // GenerateHealthReport creates a detailed report on branch state and killability
 func (v *KillSwitchValidator) GenerateHealthReport(branch *SpeculativeBranch, branchID string) *BranchHealthReport {
 	report := &BranchHealthReport{
-		BranchID:     branchID,
-		IsKilled:     false,
-		IsProtected:  false,
-		HasPendingWork: false,
-		CanBeKilled:  true,
+		BranchID:         branchID,
+		IsKilled:         false,
+		IsProtected:      false,
+		HasPendingWork:   false,
+		CanBeKilled:      true,
 		ValidationIssues: []string{},
 	}
 

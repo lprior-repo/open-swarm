@@ -78,17 +78,17 @@ type parseContext struct {
 
 // regexPatterns caches compiled regex patterns for reuse
 type regexPatterns struct {
-	failLineRegex       *regexp.Regexp
-	testFailRegex       *regexp.Regexp
-	panicRegex          *regexp.Regexp
-	errorLocationRegex  *regexp.Regexp
-	okPassRegex         *regexp.Regexp
-	passTestRegex       *regexp.Regexp
-	timingRegex         *regexp.Regexp
-	coverageRegex       *regexp.Regexp
-	buildFailRegex      *regexp.Regexp
-	runLineRegex        *regexp.Regexp
-	contLineRegex       *regexp.Regexp
+	failLineRegex      *regexp.Regexp
+	testFailRegex      *regexp.Regexp
+	panicRegex         *regexp.Regexp
+	errorLocationRegex *regexp.Regexp
+	okPassRegex        *regexp.Regexp
+	passTestRegex      *regexp.Regexp
+	timingRegex        *regexp.Regexp
+	coverageRegex      *regexp.Regexp
+	buildFailRegex     *regexp.Regexp
+	runLineRegex       *regexp.Regexp
+	contLineRegex      *regexp.Regexp
 }
 
 // newPatterns creates compiled regex patterns

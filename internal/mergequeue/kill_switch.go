@@ -39,17 +39,17 @@ import (
 // # Concurrent Kill Attempts Detection
 //
 // If two goroutines try to kill the same branch simultaneously:
-//  - Both acquire the lock sequentially (Go's sync.Mutex ensures fairness)
-//  - First goroutine: Marks as killed, increments metrics
-//  - Second goroutine: Sees already-killed status, returns without side effects
-//  - Result: Metrics are accurate, no race conditions
+//   - Both acquire the lock sequentially (Go's sync.Mutex ensures fairness)
+//   - First goroutine: Marks as killed, increments metrics
+//   - Second goroutine: Sees already-killed status, returns without side effects
+//   - Result: Metrics are accurate, no race conditions
 //
 // # Timeout Behavior
 //
-//  - If cleanup completes within KillSwitchTimeout, returns nil
-//  - If cleanup times out, marks branch as killed anyway (graceful degradation)
-//  - Returns timeout error but ensures branch is marked as killed
-//  - Branch state is always updated, even on timeout
+//   - If cleanup completes within KillSwitchTimeout, returns nil
+//   - If cleanup times out, marks branch as killed anyway (graceful degradation)
+//   - Returns timeout error but ensures branch is marked as killed
+//   - Branch state is always updated, even on timeout
 //
 // # Graceful Degradation
 //
@@ -152,13 +152,13 @@ func (c *Coordinator) killFailedBranchWithTimeout(ctx context.Context, branchID 
 		}
 		c.mu.Unlock()
 		return &TimeoutError{
-		Step:              "kill_single_branch",
-		BranchID:          branchID,
-		ConfiguredTimeout: c.config.KillSwitchTimeout.Milliseconds(),
-		PartialProgress:   true,
-		CompletedSteps:    []string{"marked_as_killed"},
-		PendingSteps:      []string{"cleanup", "notification"},
-	}
+			Step:              "kill_single_branch",
+			BranchID:          branchID,
+			ConfiguredTimeout: c.config.KillSwitchTimeout.Milliseconds(),
+			PartialProgress:   true,
+			CompletedSteps:    []string{"marked_as_killed"},
+			PendingSteps:      []string{"cleanup", "notification"},
+		}
 	}
 }
 
@@ -173,29 +173,29 @@ func (c *Coordinator) killFailedBranchWithTimeout(ctx context.Context, branchID 
 //
 // # Timeout Behavior
 //
-//  - Creates a timeout context for the entire cascade operation
-//  - Cascade timeout = KillSwitchTimeout * 10 (allows for deep hierarchies)
-//  - Each individual kill uses the coordinator's KillSwitchTimeout
-//  - If the cascade times out, partial progress is maintained (some branches may be killed)
-//  - Returns timeout error if cascade doesn't complete in time
+//   - Creates a timeout context for the entire cascade operation
+//   - Cascade timeout = KillSwitchTimeout * 10 (allows for deep hierarchies)
+//   - Each individual kill uses the coordinator's KillSwitchTimeout
+//   - If the cascade times out, partial progress is maintained (some branches may be killed)
+//   - Returns timeout error if cascade doesn't complete in time
 //
 // # Partial Progress Guarantee
 //
 // Even if the cascade times out:
-//  - All branches processed before timeout are properly killed
-//  - Their resources are cleaned up (or marked for cleanup)
-//  - TotalKills metrics are accurate for completed kills
-//  - Remaining branches can be retried or garbage collected later
+//   - All branches processed before timeout are properly killed
+//   - Their resources are cleaned up (or marked for cleanup)
+//   - TotalKills metrics are accurate for completed kills
+//   - Remaining branches can be retried or garbage collected later
 //
 // This ensures the merge queue doesn't get stuck on problematic branch hierarchies.
 //
 // # Error Handling
 //
 // The function uses best-effort error handling:
-//  - First error encountered is captured and returned
-//  - Subsequent errors are logged but don't override first error
-//  - Processing continues even after errors
-//  - Timeout errors take precedence over other errors
+//   - First error encountered is captured and returned
+//   - Subsequent errors are logged but don't override first error
+//   - Processing continues even after errors
+//   - Timeout errors take precedence over other errors
 //
 // # Idempotency
 //
@@ -206,9 +206,9 @@ func (c *Coordinator) killFailedBranchWithTimeout(ctx context.Context, branchID 
 //
 // The cascade timeout is set to KillSwitchTimeout * 10 to handle deep hierarchies.
 // For very deep speculation (>10 levels), consider:
-//  - Increasing KillSwitchTimeout in config
-//  - Reducing speculation depth
-//  - Implementing breadth-first killing instead of depth-first
+//   - Increasing KillSwitchTimeout in config
+//   - Reducing speculation depth
+//   - Implementing breadth-first killing instead of depth-first
 //
 // # Example Usage
 //
@@ -247,19 +247,19 @@ func (c *Coordinator) killDependentBranchesWithTimeout(ctx context.Context, bran
 // # Thread Safety with Concurrency
 //
 // This implementation uses sync.WaitGroup to enable concurrent processing of sibling children:
-//  - Each child is processed in its own goroutine
-//  - No child modifications shared between goroutines (each has its own descendants)
-//  - sync.Mutex protects firstErr variable to safely capture errors
-//  - Context checks happen in each goroutine to respect timeouts
-//  - Lock-release-recurse pattern prevents deadlocks during recursion
+//   - Each child is processed in its own goroutine
+//   - No child modifications shared between goroutines (each has its own descendants)
+//   - sync.Mutex protects firstErr variable to safely capture errors
+//   - Context checks happen in each goroutine to respect timeouts
+//   - Lock-release-recurse pattern prevents deadlocks during recursion
 //
 // # Concurrent Kill Safety
 //
 // Multiple concurrent kill operations on different branches:
-//  - acquire separate locks for their respective branch snapshots
-//  - proceed independently if no parent-child conflicts
-//  - idempotency checks prevent issues if parent is killed before child
-//  - metrics are accurate due to atomic increments within locks
+//   - acquire separate locks for their respective branch snapshots
+//   - proceed independently if no parent-child conflicts
+//   - idempotency checks prevent issues if parent is killed before child
+//   - metrics are accurate due to atomic increments within locks
 //
 // # Race Condition Prevention
 //

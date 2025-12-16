@@ -16,10 +16,11 @@ import (
 	"go.temporal.io/sdk/worker"
 
 	"open-swarm/internal/temporal"
+	"open-swarm/pkg/dag"
 )
 
 const (
-	maxConcurrentActivityExecutionSize      = 50  // Match MaxConcurrentAgents
+	maxConcurrentActivityExecutionSize      = 50 // Match MaxConcurrentAgents
 	maxConcurrentWorkflowTaskExecutionSize  = 10
 	maxConcurrentLocalActivityExecutionSize = 100
 	workerStopTimeout                       = 30 * time.Second
@@ -59,14 +60,14 @@ func main() {
 	// Register workflows
 	w.RegisterWorkflow(temporal.TCRWorkflow)
 	w.RegisterWorkflow(temporal.EnhancedTCRWorkflow)
-	w.RegisterWorkflow(temporal.TddDagWorkflow)
-	w.RegisterWorkflow(temporal.StressTestWorkflow)
+	w.RegisterWorkflow(dag.TddDagWorkflow)
 
 	// Register activities
 	cellActivities := temporal.NewCellActivities()
 	enhancedActivities := temporal.NewEnhancedActivities()
 	shellActivities := &temporal.ShellActivities{}
 	agentActivities := temporal.NewAgentActivities()
+	dagActivities := &dag.ShellActivities{}
 
 	w.RegisterActivity(cellActivities.BootstrapCell)
 	w.RegisterActivity(cellActivities.ExecuteTask)
@@ -86,6 +87,7 @@ func main() {
 	w.RegisterActivity(shellActivities.RunScriptInDir)
 	w.RegisterActivity(agentActivities.InvokeAgent)
 	w.RegisterActivity(agentActivities.StreamedInvokeAgent)
+	w.RegisterActivity(dagActivities)
 
 	log.Println("📋 Registered workflows and activities")
 	log.Println("⚙️  Worker listening on task queue: reactor-task-queue")

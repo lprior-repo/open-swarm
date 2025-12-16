@@ -117,7 +117,7 @@ func (c *Client) applyPromptOptions(promptParams *opencode.SessionPromptParams, 
 		// Parse model string in format "provider/model" or just "model"
 		providerID := ""
 		modelID := opts.Model
-		
+
 		if strings.Contains(opts.Model, "/") {
 			parts := strings.SplitN(opts.Model, "/", 2)
 			if len(parts) == 2 {
@@ -125,7 +125,7 @@ func (c *Client) applyPromptOptions(promptParams *opencode.SessionPromptParams, 
 				modelID = parts[1]
 			}
 		}
-		
+
 		promptParams.Model = opencode.F(opencode.SessionPromptParamsModel{
 			ProviderID: opencode.F(providerID),
 			ModelID:    opencode.F(modelID),

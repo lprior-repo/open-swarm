@@ -171,14 +171,17 @@ func (aa *AgentActivities) InvokeAgent(ctx context.Context, input *AgentInvokeIn
 
 	// Parse result
 	agentResult := &AgentInvokeResult{
-		Success:       true,
-		SessionID:     result.SessionID,
-		MessageID:     result.MessageID,
-		Output:        result.GetText(),
-		Duration:      time.Since(startTime),
-		Model:         input.Model,
-		Agent:         input.Agent,
-		ToolResults:   []struct{ ToolName string; Result interface{} }{},
+		Success:   true,
+		SessionID: result.SessionID,
+		MessageID: result.MessageID,
+		Output:    result.GetText(),
+		Duration:  time.Since(startTime),
+		Model:     input.Model,
+		Agent:     input.Agent,
+		ToolResults: []struct {
+			ToolName string
+			Result   interface{}
+		}{},
 		PartialOutput: []string{},
 	}
 
@@ -350,7 +353,6 @@ func contains(s, substr string) bool {
 	}
 	return false
 }
-
 
 // AgentResultParser provides structured parsing of agent results
 type AgentResultParser struct{}

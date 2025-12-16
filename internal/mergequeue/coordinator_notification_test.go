@@ -85,7 +85,7 @@ func TestCoordinator_KillFailedBranch_SendsNotification(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill the branch
-	err := coord.killFailedBranch(context.Background(), "test-branch-1", "tests failed")
+	err := coord.KillFailedBranchWithValidation(context.Background(), "test-branch-1", "tests failed")
 	require.NoError(t, err)
 
 	// Verify notification was sent
@@ -117,7 +117,7 @@ func TestCoordinator_KillFailedBranch_NoNotifierConfigured(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill should still succeed even without notifier (graceful degradation)
-	err := coord.killFailedBranch(context.Background(), "test-branch-1", "tests failed")
+	err := coord.KillFailedBranchWithValidation(context.Background(), "test-branch-1", "tests failed")
 	require.NoError(t, err)
 
 	// Verify branch was killed
@@ -151,7 +151,7 @@ func TestCoordinator_NotifyBranchKilled_NotifierReturnsError(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill should still succeed even if notification fails
-	err := coord.killFailedBranch(context.Background(), "test-branch-1", "tests failed")
+	err := coord.KillFailedBranchWithValidation(context.Background(), "test-branch-1", "tests failed")
 	require.NoError(t, err)
 
 	// Verify branch was still killed
@@ -199,7 +199,7 @@ func TestCoordinator_KillDependentBranches_SendsNotifications(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill dependent branches
-	err := coord.killDependentBranches(context.Background(), "parent-branch")
+	err := coord.KillDependentBranchesWithValidation(context.Background(), "parent-branch")
 	require.NoError(t, err)
 
 	// Verify notifications were sent for both children

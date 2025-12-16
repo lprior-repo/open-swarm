@@ -108,11 +108,11 @@ func (t *TestExecutionActivities) VerifyRED(ctx context.Context, output Bootstra
 	testResult, err := t.RunTests(ctx, output)
 	if err != nil {
 		return &GateResult{
-			GateName:     "verify_red",
-			Passed:       false,
-			Duration:     time.Since(startTime),
-			Error:        err.Error(),
-			TestResult:   testResult,
+			GateName:      "verify_red",
+			Passed:        false,
+			Duration:      time.Since(startTime),
+			Error:         err.Error(),
+			TestResult:    testResult,
 			RetryAttempts: 0,
 		}, err
 	}

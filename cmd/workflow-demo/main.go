@@ -14,7 +14,7 @@ import (
 
 	"go.temporal.io/sdk/client"
 
-	"open-swarm/internal/temporal"
+	"open-swarm/pkg/dag"
 )
 
 const (
@@ -47,7 +47,7 @@ func main() {
 	log.Println("📊 Starting Demo DAG Workflow...")
 	workflowID := fmt.Sprintf("demo-dag-%d", time.Now().Unix())
 
-	tasks := []temporal.Task{
+	tasks := []dag.Task{
 		{Name: "prepare", Command: "echo '🔧 Preparing workspace...' && sleep 2", Deps: []string{}},
 		{Name: "build-frontend", Command: "echo '🎨 Building frontend...' && sleep 3", Deps: []string{"prepare"}},
 		{Name: "build-backend", Command: "echo '⚙️  Building backend...' && sleep 3", Deps: []string{"prepare"}},
@@ -55,7 +55,7 @@ func main() {
 		{Name: "deploy", Command: "echo '🚀 Deploying...' && sleep 2", Deps: []string{"run-tests"}},
 	}
 
-	input := temporal.DAGWorkflowInput{
+	input := dag.WorkflowInput{
 		WorkflowID: workflowID,
 		Branch:     "main",
 		Tasks:      tasks,
@@ -66,7 +66,7 @@ func main() {
 		TaskQueue: "open-swarm-demo",
 	}
 
-	we, err := c.ExecuteWorkflow(context.Background(), workflowOptions, temporal.TddDagWorkflow, input)
+	we, err := c.ExecuteWorkflow(context.Background(), workflowOptions, dag.TddDagWorkflow, input)
 	if err != nil {
 		log.Printf("❌ Failed to start workflow: %v", err)
 		os.Exit(1)

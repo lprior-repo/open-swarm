@@ -567,5 +567,3 @@ func containsLintString(s, substr string) bool {
 	}
 	return false
 }
-
-

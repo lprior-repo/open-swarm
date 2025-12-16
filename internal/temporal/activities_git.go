@@ -214,11 +214,11 @@ func (ga *GitActivities) GitCommit(ctx context.Context, input GitCommitInput) (*
 
 // GitPushInput specifies parameters for pushing to remote
 type GitPushInput struct {
-	RepoPath string // Path to the repository
-	Remote   string // Remote name (typically "origin")
-	Branch   string // Branch to push
-	Force    bool   // Whether to force push
-	SetUpstream bool // Whether to set upstream tracking
+	RepoPath    string // Path to the repository
+	Remote      string // Remote name (typically "origin")
+	Branch      string // Branch to push
+	Force       bool   // Whether to force push
+	SetUpstream bool   // Whether to set upstream tracking
 }
 
 // GitPush pushes commits to a remote repository
@@ -255,13 +255,13 @@ func (ga *GitActivities) GitPush(ctx context.Context, input GitPushInput) error 
 
 // GitStatusOutput contains the status of the repository
 type GitStatusOutput struct {
-	Branch      string   // Current branch
-	Modified    []string // Modified files
-	Untracked   []string // Untracked files
-	Staged      []string // Staged files
-	IsDirty     bool     // Whether there are uncommitted changes
-	AheadBy     int      // Commits ahead of remote
-	BehindBy    int      // Commits behind remote
+	Branch    string   // Current branch
+	Modified  []string // Modified files
+	Untracked []string // Untracked files
+	Staged    []string // Staged files
+	IsDirty   bool     // Whether there are uncommitted changes
+	AheadBy   int      // Commits ahead of remote
+	BehindBy  int      // Commits behind remote
 }
 
 // GitStatus returns the current status of the repository
@@ -329,10 +329,10 @@ func (ga *GitActivities) GitStatus(ctx context.Context, repoPath string) (*GitSt
 
 // GitDiffOutput contains diff information
 type GitDiffOutput struct {
-	Diff        string   // Full diff text
+	Diff         string   // Full diff text
 	FilesChanged []string // List of changed files
-	Insertions  int      // Number of insertions
-	Deletions   int      // Number of deletions
+	Insertions   int      // Number of insertions
+	Deletions    int      // Number of deletions
 }
 
 // GitDiff returns the diff between two commits/branches
@@ -366,10 +366,10 @@ func (ga *GitActivities) GitDiff(ctx context.Context, repoPath, from, to string)
 	statsOutput, _ := statsCmd.Output()
 
 	result := &GitDiffOutput{
-		Diff:        string(diffOutput),
+		Diff:         string(diffOutput),
 		FilesChanged: files,
-		Insertions:  0,
-		Deletions:   0,
+		Insertions:   0,
+		Deletions:    0,
 	}
 
 	// Parse stats for insertions/deletions

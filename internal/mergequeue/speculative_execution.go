@@ -133,9 +133,9 @@ func (c *Coordinator) runBranchTests(_ context.Context, branch *SpeculativeBranc
 	}
 
 	return &TestResult{
-		ChangeIDs: changeIDs,
-		Passed:    true,
-		Duration:  100 * time.Millisecond,
+		ChangeIDs:  changeIDs,
+		Passed:     true,
+		Duration:   100 * time.Millisecond,
 		TestOutput: "Stub test execution - all tests passed",
 	}
 }
@@ -244,8 +244,9 @@ func (c *Coordinator) processBypassImpl(ctx context.Context, change *ChangeReque
 // Returns empty slice if branch not found.
 //
 // Example:
-//  Given hierarchy: Branch A -> Branch B -> Branch C
-//  GetBranchAncestry("branch-C") returns ["branch-A", "branch-B", "branch-C"]
+//
+//	Given hierarchy: Branch A -> Branch B -> Branch C
+//	GetBranchAncestry("branch-C") returns ["branch-A", "branch-B", "branch-C"]
 func (c *Coordinator) GetBranchAncestry(branchID string) []string {
 	c.mu.RLock()
 	branch, exists := c.activeBranches[branchID]
@@ -278,9 +279,10 @@ func (c *Coordinator) GetBranchAncestry(branchID string) []string {
 // Returns empty slice if branch not found.
 //
 // Example:
-//  Given hierarchy: Branch A -> Branch B -> Branch C
-//                              -> Branch D
-//  GetBranchDescendants("branch-A") returns ["branch-B", "branch-D", "branch-C"]
+//
+//	Given hierarchy: Branch A -> Branch B -> Branch C
+//	                            -> Branch D
+//	GetBranchDescendants("branch-A") returns ["branch-B", "branch-D", "branch-C"]
 func (c *Coordinator) GetBranchDescendants(branchID string) []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -314,9 +316,10 @@ func (c *Coordinator) GetBranchDescendants(branchID string) []string {
 // Returns empty slice if branch not found.
 //
 // Example:
-//  Given hierarchy: Branch A -> Branch B
-//                            -> Branch C
-//  GetBranchSiblings("branch-B") returns ["branch-C"]
+//
+//	Given hierarchy: Branch A -> Branch B
+//	                          -> Branch C
+//	GetBranchSiblings("branch-B") returns ["branch-C"]
 func (c *Coordinator) GetBranchSiblings(branchID string) []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -350,8 +353,9 @@ func (c *Coordinator) GetBranchSiblings(branchID string) []string {
 // Returns true if ancestorID is in the parent chain of branchID.
 //
 // Example:
-//  Given hierarchy: Branch A -> Branch B -> Branch C
-//  IsAncestorOf("branch-A", "branch-C") returns true
+//
+//	Given hierarchy: Branch A -> Branch B -> Branch C
+//	IsAncestorOf("branch-A", "branch-C") returns true
 func (c *Coordinator) IsAncestorOf(ancestorID, branchID string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -381,8 +385,9 @@ func (c *Coordinator) IsAncestorOf(ancestorID, branchID string) bool {
 // Useful for marking entire branch families as cancelled, suspended, etc.
 //
 // Example:
-//  CascadeStatusUpdate("branch-A", BranchStatusCancelled)
-//  This would mark branch A and all its descendants as cancelled
+//
+//	CascadeStatusUpdate("branch-A", BranchStatusCancelled)
+//	This would mark branch A and all its descendants as cancelled
 func (c *Coordinator) CascadeStatusUpdate(branchID string, newStatus BranchStatus) error {
 	c.mu.Lock()
 	branch, exists := c.activeBranches[branchID]
@@ -414,9 +419,10 @@ func (c *Coordinator) CascadeStatusUpdate(branchID string, newStatus BranchStatu
 // Useful for bulk operations on related branches.
 //
 // Example:
-//  Given hierarchy: Branch A -> Branch B -> Branch C
-//  CollectBranchFamily("branch-B") returns ["branch-B", "branch-C"]
-//  CollectBranchFamily("branch-A") returns ["branch-A", "branch-B", "branch-C"]
+//
+//	Given hierarchy: Branch A -> Branch B -> Branch C
+//	CollectBranchFamily("branch-B") returns ["branch-B", "branch-C"]
+//	CollectBranchFamily("branch-A") returns ["branch-A", "branch-B", "branch-C"]
 func (c *Coordinator) CollectBranchFamily(branchID string) []string {
 	c.mu.RLock()
 	branch, exists := c.activeBranches[branchID]
@@ -458,21 +464,22 @@ type BranchNode struct {
 // Returns nil if branch not found.
 //
 // Example output:
-//  {
-//    "id": "branch-A",
-//    "children": [
-//      {
-//        "id": "branch-B",
-//        "children": [
-//          {"id": "branch-D", "children": []}
-//        ]
-//      },
-//      {
-//        "id": "branch-C",
-//        "children": []
-//      }
-//    ]
-//  }
+//
+//	{
+//	  "id": "branch-A",
+//	  "children": [
+//	    {
+//	      "id": "branch-B",
+//	      "children": [
+//	        {"id": "branch-D", "children": []}
+//	      ]
+//	    },
+//	    {
+//	      "id": "branch-C",
+//	      "children": []
+//	    }
+//	  ]
+//	}
 func (c *Coordinator) GetBranchHierarchy(branchID string) *BranchNode {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

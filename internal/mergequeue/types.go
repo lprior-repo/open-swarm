@@ -118,32 +118,32 @@ const (
 // The kill switch metrics (KilledPercent, TotalKills) measure the effectiveness
 // of the hierarchical failure propagation system:
 //
-//  - KilledPercent: Percentage of branches terminated by the kill switch
-//  - TotalKills: Total count of kill switch activations
+//   - KilledPercent: Percentage of branches terminated by the kill switch
+//   - TotalKills: Total count of kill switch activations
 //
 // A higher KilledPercent indicates more resource savings from early termination
 // of failing speculative branches. Typical values:
-//  - >30%: High kill switch activity (saving significant resources)
-//  - 10-30%: Moderate kill switch activity
-//  - <10%: Low kill switch activity (high pass rates or shallow speculation)
+//   - >30%: High kill switch activity (saving significant resources)
+//   - 10-30%: Moderate kill switch activity
+//   - <10%: Low kill switch activity (high pass rates or shallow speculation)
 //
 // The ratio TotalKills/TotalFailures shows cascading effectiveness:
-//  - Ratio > 2: Effective cascading (each failure kills multiple branches)
-//  - Ratio ≈ 1: Mostly shallow hierarchies or isolated failures
+//   - Ratio > 2: Effective cascading (each failure kills multiple branches)
+//   - Ratio ≈ 1: Mostly shallow hierarchies or isolated failures
 //
 // See KILLSWITCH.md for detailed architecture documentation.
 type QueueStats struct {
-	MergedPerHour   float64   // Average merge rate
-	SuccessRate     float64   // Percentage of successful merges
+	MergedPerHour   float64 // Average merge rate
+	SuccessRate     float64 // Percentage of successful merges
 	AvgQueueTime    time.Duration
-	BypassedPercent float64   // Percentage that used bypass lane
+	BypassedPercent float64 // Percentage that used bypass lane
 	// KilledPercent is the percentage of branches terminated by the kill switch.
 	// High values indicate effective resource savings from hierarchical failure propagation.
 	KilledPercent float64
-	AvgDepth      float64   // Average speculation depth
-	TotalTests    int64     // Total number of tests executed
-	TotalPasses   int64     // Total number of passed tests
-	TotalFailures int64     // Total number of test failures
+	AvgDepth      float64 // Average speculation depth
+	TotalTests    int64   // Total number of tests executed
+	TotalPasses   int64   // Total number of passed tests
+	TotalFailures int64   // Total number of test failures
 	// TotalKills counts how many branches were terminated via the kill switch.
 	// This includes both direct failures and cascading kills from parent failures.
 	TotalKills    int64

@@ -293,7 +293,7 @@ func (c *Coordinator) processTestResult(ctx context.Context, result *TestResult)
 	} else if failedBranchID != "" {
 		// Kill switch: Kill failed branch and all its dependent children
 		// First kill all dependent branches
-		cascadeErr := c.killDependentBranches(ctx, failedBranchID)
+		cascadeErr := c.KillDependentBranchesWithValidation(ctx, failedBranchID)
 		if cascadeErr != nil {
 			// Log cascade error but continue to kill the main branch
 			// The cascade may have partially succeeded
@@ -310,7 +310,7 @@ func (c *Coordinator) processTestResult(ctx context.Context, result *TestResult)
 		}
 
 		// Then kill the failed branch itself
-		mainKillErr := c.killFailedBranch(ctx, failedBranchID, fmt.Sprintf("tests failed: %s", result.ErrorMessage))
+		mainKillErr := c.KillFailedBranchWithValidation(ctx, failedBranchID, fmt.Sprintf("tests failed: %s", result.ErrorMessage))
 		if mainKillErr != nil {
 			// Log error but branch state is still updated
 			_ = mainKillErr // would be logged in production
@@ -345,8 +345,8 @@ func (c *Coordinator) GetStats() QueueStats {
 	return c.stats
 }
 
-// killFailedBranch kills a single speculative branch and cleans up its resources
-func (c *Coordinator) killFailedBranch(ctx context.Context, branchID string, reason string) error {
+// KillFailedBranchWithValidation kills a single speculative branch and cleans up its resources
+func (c *Coordinator) KillFailedBranchWithValidation(ctx context.Context, branchID string, reason string) error {
 	logger := slog.Default()
 	startTime := time.Now()
 
@@ -443,8 +443,8 @@ func (c *Coordinator) killFailedBranch(ctx context.Context, branchID string, rea
 	return nil
 }
 
-// killDependentBranches recursively kills all child branches when a parent fails
-func (c *Coordinator) killDependentBranches(ctx context.Context, branchID string) error {
+// KillDependentBranchesWithValidation recursively kills all child branches when a parent fails
+func (c *Coordinator) KillDependentBranchesWithValidation(ctx context.Context, branchID string) error {
 	logger := slog.Default()
 	startTime := time.Now()
 
@@ -486,7 +486,7 @@ func (c *Coordinator) killDependentBranches(ctx context.Context, branchID string
 		)
 
 		// First kill the child's descendants
-		if err := c.killDependentBranches(ctx, childID); err != nil {
+		if err := c.KillDependentBranchesWithValidation(ctx, childID); err != nil {
 			// Log error but continue killing other branches
 			logger.Error("Failed to cascade kill descendants",
 				"child_branch_id", childID,
@@ -499,7 +499,7 @@ func (c *Coordinator) killDependentBranches(ctx context.Context, branchID string
 
 		// Then kill the child itself
 		childKillReason := fmt.Sprintf("parent branch %s failed", branchID)
-		if err := c.killFailedBranch(ctx, childID, childKillReason); err != nil {
+		if err := c.KillFailedBranchWithValidation(ctx, childID, childKillReason); err != nil {
 			// Log error but continue
 			logger.Error("Failed to kill dependent branch",
 				"child_branch_id", childID,
