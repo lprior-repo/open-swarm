@@ -60,6 +60,7 @@ func main() {
 	// Register workflows
 	w.RegisterWorkflow(temporal.TCRWorkflow)
 	w.RegisterWorkflow(temporal.EnhancedTCRWorkflow)
+	w.RegisterWorkflow(temporal.BenchmarkWorkflow)
 	w.RegisterWorkflow(dag.TddDagWorkflow)
 
 	// Register activities

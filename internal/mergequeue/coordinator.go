@@ -47,6 +47,8 @@ type Coordinator struct {
 	resultsChan  chan *TestResult
 	shutdownChan chan struct{}
 	shutdownOnce sync.Once
+
+	validator *KillSwitchValidator
 }
 
 // CoordinatorConfig holds merge queue configuration
@@ -106,6 +108,7 @@ func NewCoordinator(config CoordinatorConfig) *Coordinator {
 		changesChan:    make(chan *ChangeRequest, defaultChannelCapacity),
 		resultsChan:    make(chan *TestResult, defaultChannelCapacity),
 		shutdownChan:   make(chan struct{}),
+		validator:      NewKillSwitchValidator(),
 	}
 }
 
@@ -346,7 +349,7 @@ func (c *Coordinator) GetStats() QueueStats {
 }
 
 // KillFailedBranchWithValidation kills a single speculative branch and cleans up its resources
-func (c *Coordinator) KillFailedBranchWithValidation(ctx context.Context, branchID string, reason string) error {
+func (c *Coordinator) KillFailedBranchWithValidation(ctx context.Context, branchID string, reason string, requestingAgent string) *BranchValidationError {
 	logger := slog.Default()
 	startTime := time.Now()
 
@@ -354,18 +357,31 @@ func (c *Coordinator) KillFailedBranchWithValidation(ctx context.Context, branch
 	logger.Info("Kill switch initiated (basic version)",
 		"branch_id", branchID,
 		"reason", reason,
+		"requesting_agent", requestingAgent,
 	)
 
+	// Pre-validation (read-only access)
+	c.mu.RLock()
+	branch, exists := c.activeBranches[branchID]
+	c.mu.RUnlock()
+
+	if !exists {
+		return c.validator.ValidateBranchExists(nil, branchID)
+	}
+
+	if validationErr := c.validator.ValidateFullKillSwitchPrerequisites(branch, branchID, requestingAgent); validationErr != nil {
+		return validationErr
+	}
+
+	// If validation passes, proceed with modification (write-lock)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	branch, exists := c.activeBranches[branchID]
+	// Re-check existence under write lock (though unlikely to change after RLock)
+	branch, exists = c.activeBranches[branchID]
 	if !exists {
-		logger.Error("Branch not found during kill operation",
-			"branch_id", branchID,
-			"error", "branch not found",
-		)
-		return fmt.Errorf("branch %s not found", branchID)
+		// Should not happen if pre-validation passed, but defensive check
+		return c.validator.ValidateBranchExists(nil, branchID)
 	}
 
 	// Idempotent: if already killed, return success
@@ -444,28 +460,40 @@ func (c *Coordinator) KillFailedBranchWithValidation(ctx context.Context, branch
 }
 
 // KillDependentBranchesWithValidation recursively kills all child branches when a parent fails
-func (c *Coordinator) KillDependentBranchesWithValidation(ctx context.Context, branchID string) error {
+func (c *Coordinator) KillDependentBranchesWithValidation(ctx context.Context, branchID string, requestingAgent string) (*BranchValidationError, error) {
 	logger := slog.Default()
 	startTime := time.Now()
 
 	logger.Info("Cascade kill initiated (basic version)",
 		"parent_branch_id", branchID,
+		"requesting_agent", requestingAgent,
 	)
 
-	c.mu.Lock()
-	branch, exists := c.activeBranches[branchID]
+	// Pre-validation (read-only access)
+	c.mu.RLock()
+	parentBranch, exists := c.activeBranches[branchID]
+	c.mu.RUnlock()
+
 	if !exists {
-		c.mu.Unlock()
-		logger.Error("Branch not found in cascade kill",
-			"branch_id", branchID,
-			"error", "branch not found",
-		)
-		return fmt.Errorf("branch %s not found", branchID)
+		return c.validator.ValidateBranchExists(nil, branchID), nil // Validation error, no cascade error
 	}
 
-	childrenIDs := make([]string, len(branch.ChildrenIDs))
-	copy(childrenIDs, branch.ChildrenIDs)
-	c.mu.Unlock()
+	if validationErr := c.validator.ValidateFullKillSwitchPrerequisites(parentBranch, branchID, requestingAgent); validationErr != nil {
+		return validationErr, nil // Validation error, no cascade error
+	}
+
+	// Acquire write lock for modifications
+	c.mu.Lock()
+	// Re-check existence under write lock
+	parentBranch, exists = c.activeBranches[branchID]
+	if !exists {
+		// Should not happen if pre-validation passed, but defensive check
+		c.mu.Unlock()
+		return c.validator.ValidateBranchExists(nil, branchID), nil
+	}
+	childrenIDs := make([]string, len(parentBranch.ChildrenIDs))
+	copy(childrenIDs, parentBranch.ChildrenIDs)
+	c.mu.Unlock() // Release lock briefly to allow recursive calls
 
 	logger.Debug("Processing dependent branches",
 		"parent_branch_id", branchID,
@@ -473,6 +501,7 @@ func (c *Coordinator) KillDependentBranchesWithValidation(ctx context.Context, b
 		"children_ids", childrenIDs,
 	)
 
+	var cascadeError error // For errors during cascade
 	var killedCount int
 	var failureCount int
 
@@ -486,27 +515,36 @@ func (c *Coordinator) KillDependentBranchesWithValidation(ctx context.Context, b
 		)
 
 		// First kill the child's descendants
-		if err := c.KillDependentBranchesWithValidation(ctx, childID); err != nil {
-			// Log error but continue killing other branches
+		if valErr, err := c.KillDependentBranchesWithValidation(ctx, childID, requestingAgent); valErr != nil || err != nil {
 			logger.Error("Failed to cascade kill descendants",
 				"child_branch_id", childID,
 				"parent_branch_id", branchID,
-				"error", err.Error(),
+				"validation_error", valErr,
+				"cascade_error", err,
 			)
+			if cascadeError == nil {
+				if valErr != nil {
+					cascadeError = valErr
+				} else {
+					cascadeError = err
+				}
+			}
 			failureCount++
 			continue
 		}
 
 		// Then kill the child itself
 		childKillReason := fmt.Sprintf("parent branch %s failed", branchID)
-		if err := c.KillFailedBranchWithValidation(ctx, childID, childKillReason); err != nil {
-			// Log error but continue
+		if valErr := c.KillFailedBranchWithValidation(ctx, childID, childKillReason, requestingAgent); valErr != nil {
 			logger.Error("Failed to kill dependent branch",
 				"child_branch_id", childID,
 				"parent_branch_id", branchID,
-				"error", err.Error(),
+				"validation_error", valErr,
 				"kill_reason", childKillReason,
 			)
+			if cascadeError == nil {
+				cascadeError = valErr
+			}
 			failureCount++
 			continue
 		}
@@ -543,7 +581,19 @@ func (c *Coordinator) KillDependentBranchesWithValidation(ctx context.Context, b
 		)
 	}
 
-	return nil
+	return nil, cascadeError
+}
+
+// GetBranchHealthReport provides a detailed status report for a branch
+func (c *Coordinator) GetBranchHealthReport(branchID string) *BranchHealthReport {
+	c.mu.RLock()
+	branch, exists := c.activeBranches[branchID]
+	c.mu.RUnlock()
+
+	if !exists {
+		return c.validator.GenerateHealthReport(nil, branchID)
+	}
+	return c.validator.GenerateHealthReport(branch, branchID)
 }
 
 // Helper functions

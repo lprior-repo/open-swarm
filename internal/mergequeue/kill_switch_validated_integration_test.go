@@ -72,10 +72,10 @@ func TestKillFailedBranchWithValidation_ProtectedBranch(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill should fail due to protection
-	err := coord.KillFailedBranchWithValidation(ctx, "main", "test failure")
-	require.NotNil(t, err)
-	assert.Equal(t, ValidationCodeBranchProtected, err.Code)
-	assert.Contains(t, err.Message, "protected")
+	validationErr := coord.KillFailedBranchWithValidation(ctx, "main", "test failure")
+	require.NotNil(t, validationErr)
+	assert.Equal(t, ValidationCodeBranchProtected, validationErr.Code)
+	assert.Contains(t, validationErr.Message, "protected")
 
 	// Verify branch was NOT killed
 	coord.mu.RLock()
@@ -96,9 +96,9 @@ func TestKillFailedBranchWithValidation_BranchNotFound(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill non-existent branch should fail
-	err := coord.KillFailedBranchWithValidation(ctx, "non-existent", "test failure")
-	require.NotNil(t, err)
-	assert.Equal(t, ValidationCodeBranchNotFound, err.Code)
+	validationErr := coord.KillFailedBranchWithValidation(ctx, "non-existent", "test failure")
+	require.NotNil(t, validationErr)
+	assert.Equal(t, ValidationCodeBranchNotFound, validationErr.Code)
 }
 
 func TestKillFailedBranchWithValidation_OwnershipMismatch(t *testing.T) {
@@ -123,9 +123,9 @@ func TestKillFailedBranchWithValidation_OwnershipMismatch(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Try to kill as agent-2 (different owner)
-	err := coord.KillFailedBranchWithValidation(ctx, "feature-branch", "test failure")
-	require.NotNil(t, err)
-	assert.Equal(t, ValidationCodeOwnershipMismatch, err.Code)
+	validationErr := coord.KillFailedBranchWithValidation(ctx, "feature-branch", "test failure")
+	require.NotNil(t, validationErr)
+	assert.Equal(t, ValidationCodeOwnershipMismatch, validationErr.Code)
 
 	// Verify branch was NOT killed
 	coord.mu.RLock()
@@ -191,9 +191,9 @@ func TestKillFailedBranchWithValidation_PendingWork(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Kill should fail due to pending work
-	err := coord.KillFailedBranchWithValidation(ctx, "feature-branch", "test failure")
-	require.NotNil(t, err)
-	assert.Equal(t, ValidationCodePendingWork, err.Code)
+	validationErr := coord.KillFailedBranchWithValidation(ctx, "feature-branch", "test failure")
+	require.NotNil(t, validationErr)
+	assert.Equal(t, ValidationCodePendingWork, validationErr.Code)
 
 	// Verify branch was NOT killed
 	coord.mu.RLock()
@@ -339,7 +339,7 @@ func TestKillDependentBranchesWithValidation_OwnershipMismatch(t *testing.T) {
 	coord.mu.Unlock()
 
 	// Try to kill as agent-2 (different owner)
-	validationErr, cascadeErr := coord.KillDependentBranchesWithValidation(ctx, "parent", "agent-2")
+	validationErr, cascadeErr := coord.KillDependentBranchesWithValidation(ctx, "parent")
 	require.NotNil(t, validationErr, "Validation should fail")
 	require.Nil(t, cascadeErr, "Cascade should not run")
 	assert.Equal(t, ValidationCodeOwnershipMismatch, validationErr.Code)

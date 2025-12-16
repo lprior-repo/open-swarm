@@ -6,7 +6,7 @@ DOCKER := docker-compose
 BINARY_WORKER := temporal-worker
 BINARY_CLIENT := reactor-client
 BINARY_MAIN := open-swarm
-BINARY_STRESS_TEST := stress-test
+BINARY_BENCHMARK := benchmark-tcr
 
 # Detect OS for cross-platform support
 UNAME_S := $(shell uname -s)
@@ -30,7 +30,7 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Build & Development:"
-	@echo "  build             - Build all binaries (worker, client, coordinator)"
+	@echo "  build             - Build all binaries (worker, client, coordinator, benchmark)"
 	@echo "  fmt               - Format code with gofmt"
 	@echo "  install-tools     - Install required development tools"
 	@echo ""
@@ -58,7 +58,7 @@ help:
 	@echo "Runtime:"
 	@echo "  run-worker        - Start the Temporal worker (requires docker-up)"
 	@echo "  run-client        - Start the reactor client (usage: make run-client TASK=<id> PROMPT='<prompt>')"
-	@echo "  run-stress-test   - Run stress test with 100 agents (usage: make run-stress-test STRESS_OPTS='-agents 100')"
+	@echo "  run-benchmark     - Run TCR benchmark (usage: make run-benchmark STRATEGY=basic RUNS=5 PROMPT='task')"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean             - Remove built binaries and temporary files"
@@ -89,8 +89,8 @@ build:
 	@echo "  ✓ Built ./bin/single-agent-demo"
 	@$(GO) build -o bin/workflow-demo ./cmd/workflow-demo
 	@echo "  ✓ Built ./bin/workflow-demo"
-	@$(GO) build -o bin/$(BINARY_STRESS_TEST) ./cmd/stress-test
-	@echo "  ✓ Built ./bin/$(BINARY_STRESS_TEST)"
+	@$(GO) build -o bin/$(BINARY_BENCHMARK) ./cmd/benchmark-tcr
+	@echo "  ✓ Built ./bin/$(BINARY_BENCHMARK)"
 	@echo ""
 	@echo "✓ All binaries built successfully"
 
@@ -121,15 +121,25 @@ run-client: build
 	@echo ""
 	./bin/$(BINARY_CLIENT) -task $(TASK) -prompt "$(PROMPT)"
 
-# Run stress test
-run-stress-test: build
-	@echo "Running stress test..."
-	@echo "Make sure Docker services and worker are running:"
-	@echo "  1. Terminal 1: make docker-up"
-	@echo "  2. Terminal 2: make run-worker"
-	@echo "  3. Terminal 3: make run-stress-test"
-	@echo ""
-	./bin/$(BINARY_STRESS_TEST) $(STRESS_OPTS)
+# Run benchmark
+run-benchmark: build
+	@if [ -z "$(STRATEGY)" ] || [ -z "$(PROMPT)" ]; then \
+		echo "Error: STRATEGY and PROMPT are required"; \
+		echo "Usage: make run-benchmark STRATEGY=basic RUNS=5 PROMPT='your task'"; \
+		echo ""; \
+		echo "Examples:"; \
+		echo "  make run-benchmark STRATEGY=basic RUNS=5 PROMPT='Implement LRU cache'"; \
+		echo "  make run-benchmark STRATEGY=enhanced RUNS=3 PROMPT='Add rate limiter'"; \
+		exit 1; \
+	fi
+	@RUNS=$${RUNS:-3}; \
+	BRANCH=$${BRANCH:-main}; \
+	echo "Running TCR Benchmark..."; \
+	echo "Strategy: $(STRATEGY)"; \
+	echo "Runs: $$RUNS"; \
+	echo "Prompt: $(PROMPT)"; \
+	echo ""; \
+	./bin/$(BINARY_BENCHMARK) -strategy $(STRATEGY) -runs $$RUNS -prompt "$(PROMPT)" -branch $$BRANCH
 
 # Start Docker services (Temporal + PostgreSQL + UI)
 docker-up:
