@@ -18,9 +18,24 @@ import (
 	"go.temporal.io/sdk/log"
 )
 
-// fileSafeGetLogger returns the activity logger
-func fileSafeGetLogger(ctx context.Context) log.Logger {
-	return activity.GetLogger(ctx)
+// noopLogger is a logger that does nothing
+type noopLogger struct{}
+
+func (n noopLogger) Debug(string, ...interface{}) {}
+func (n noopLogger) Info(string, ...interface{})  {}
+func (n noopLogger) Warn(string, ...interface{})  {}
+func (n noopLogger) Error(string, ...interface{}) {}
+
+// fileSafeGetLogger returns the activity logger if in activity context, otherwise a noop logger
+func fileSafeGetLogger(ctx context.Context) (logger log.Logger) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Not in an activity context, return noop logger
+			logger = noopLogger{}
+		}
+	}()
+	logger = activity.GetLogger(ctx)
+	return logger
 }
 
 // fileSafeRecordHeartbeat records a heartbeat if in activity context

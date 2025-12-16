@@ -60,10 +60,10 @@ type ExecuteResponse struct {
 // Validate checks if the request is valid
 func (r *ExecuteRequest) Validate() error {
 	if r.TaskID == "" {
-		return fmt.Errorf("taskID is required")
+		return fmt.Errorf("TaskID is required")
 	}
 	if r.Prompt == "" {
-		return fmt.Errorf("prompt is required")
+		return fmt.Errorf("Prompt is required")
 	}
 	if len(r.Prompt) > 10000 {
 		return fmt.Errorf("prompt exceeds maximum length of 10000 characters")

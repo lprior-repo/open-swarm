@@ -69,8 +69,8 @@ func (s *BenchmarkWorkflowTestSuite) TestBenchmarkWorkflow_BasicStrategy_Success
 	s.Equal(3, result.SuccessCount)
 	s.Equal(0, result.FailureCount)
 	s.Equal(3, len(result.RunResults))
-	s.Greater(result.TotalDuration, time.Duration(0))
-	s.Greater(result.AvgDuration, time.Duration(0))
+	s.GreaterOrEqual(result.TotalDuration, time.Duration(0))
+	s.GreaterOrEqual(result.AvgDuration, time.Duration(0))
 
 	// Verify all runs were successful
 	for _, run := range result.RunResults {

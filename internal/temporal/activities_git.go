@@ -15,9 +15,16 @@ import (
 	"go.temporal.io/sdk/log"
 )
 
-// gitSafeGetLogger returns the activity logger
-func gitSafeGetLogger(ctx context.Context) log.Logger {
-	return activity.GetLogger(ctx)
+// gitSafeGetLogger returns the activity logger if in activity context, otherwise a noop logger
+func gitSafeGetLogger(ctx context.Context) (logger log.Logger) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Not in an activity context, return noop logger
+			logger = noopLogger{}
+		}
+	}()
+	logger = activity.GetLogger(ctx)
+	return logger
 }
 
 // gitSafeRecordHeartbeat records a heartbeat if in activity context

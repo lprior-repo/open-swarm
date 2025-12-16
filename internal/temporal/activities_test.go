@@ -8,6 +8,7 @@ package temporal
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -849,7 +850,7 @@ func TestTestResultStructure(t *testing.T) {
 			assert.IsType(t, 0, tt.result.PassedTests)
 			assert.IsType(t, 0, tt.result.FailedTests)
 			assert.IsType(t, "", tt.result.Output)
-			assert.IsType(t, int64(0), tt.result.Duration)
+			assert.IsType(t, time.Duration(0), tt.result.Duration)
 			assert.IsType(t, []string{}, tt.result.FailureTests)
 
 			// Run custom verification
