@@ -148,19 +148,29 @@ func (ea *EnhancedActivities) ExecuteGenTest(ctx context.Context, bootstrap *Boo
 	cell := cellActivities.reconstructCell(bootstrap)
 
 	// Execute agent to generate tests
+	// Convert taskID to lowercase package name for Go conventions
+	packageName := strings.ToLower(taskID)
 	prompt := fmt.Sprintf(`Generate TEST FILE ONLY for task: %s
+
+IMPORTANT: Create the test file at: pkg/%s/%s_test.go
+The package name should be: %s
 
 Acceptance Criteria:
 %s
 
 CRITICAL TDD REQUIREMENTS:
 - Create ONLY a _test.go file - DO NOT create any implementation
+- The test file MUST be at: pkg/%s/%s_test.go
 - Tests must call functions that DO NOT EXIST YET
 - Tests MUST FAIL when run because the implementation does not exist
 - Use table-driven tests where appropriate
 - Cover edge cases and error conditions in your test cases
 
-Example structure:
+Example structure (put in pkg/%s/%s_test.go):
+package %s
+
+import "testing"
+
 func TestHello(t *testing.T) {
     // This test should FAIL initially because Hello() doesn't exist
     result := Hello()
@@ -169,7 +179,11 @@ func TestHello(t *testing.T) {
     }
 }
 
-DO NOT create the implementation file. Only create the test file.`, taskID, acceptanceCriteria)
+DO NOT create the implementation file. Only create the test file.
+IMPORTANT: The file MUST be created at pkg/%s/%s_test.go`, taskID,
+		packageName, packageName, packageName, acceptanceCriteria,
+		packageName, packageName, packageName, packageName, packageName,
+		packageName, packageName)
 
 	result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 		Title: fmt.Sprintf("GenTest: %s", taskID),
@@ -393,7 +407,13 @@ func (ea *EnhancedActivities) ExecuteGenImpl(ctx context.Context, bootstrap *Boo
 		}
 	}
 
+	// Convert taskID to lowercase package name for Go conventions
+	packageName := strings.ToLower(taskID)
+	
 	promptBuilder.WriteString(fmt.Sprintf(`Implement the solution for task: %s
+
+IMPORTANT: Create the implementation file at: pkg/%s/%s.go
+The package name should be: %s
 
 Description: %s
 
@@ -401,10 +421,13 @@ Acceptance Criteria:
 %s
 
 Requirements:
+- Implementation file MUST be at: pkg/%s/%s.go
+- Package declaration: package %s
 - Implement code to make all tests pass
 - Follow Go best practices and idioms
 - Include proper error handling
-- Add documentation comments`, taskID, description, acceptanceCriteria))
+- Add documentation comments`, taskID, packageName, packageName, packageName,
+		description, acceptanceCriteria, packageName, packageName, packageName))
 
 	prompt := promptBuilder.String()
 
