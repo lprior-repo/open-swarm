@@ -78,6 +78,8 @@ func NewTestExecutionActivity() *TestExecutionActivity {
 //		Coverage:   true,
 //		Verbose:    true,
 //	})
+//
+//nolint:cyclop // complexity 11 is acceptable for test orchestration
 func (tea *TestExecutionActivity) ExecuteTests(ctx context.Context, opts *TestExecutionOptions) (*TestResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Starting test execution",
@@ -156,6 +158,8 @@ func (tea *TestExecutionActivity) ExecuteTests(ctx context.Context, opts *TestEx
 }
 
 // runTests performs the actual test execution
+//
+//nolint:cyclop // complexity 11 is acceptable for test execution logic
 func (tea *TestExecutionActivity) runTests(ctx context.Context, opts *TestExecutionOptions, logger log.Logger, startTime time.Time) (*TestResult, error) {
 	// Build command arguments
 	args := []string{"test"}

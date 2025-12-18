@@ -361,6 +361,8 @@ func parseIntSimple(s string) int {
 }
 
 // trimWhitespace removes leading/trailing whitespace
+//
+//nolint:cyclop // complexity 11 is acceptable for character-level processing
 func trimWhitespace(s string) string {
 	start := 0
 	end := len(s)

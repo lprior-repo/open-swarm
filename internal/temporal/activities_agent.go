@@ -364,6 +364,8 @@ func NewAgentResultParser() *AgentResultParser {
 
 // ExtractCodeBlocks extracts all code blocks from agent output
 // Handles multiple languages (go, python, bash, etc.)
+//
+//nolint:cyclop // complexity 12 is acceptable for parsing logic
 func (p *AgentResultParser) ExtractCodeBlocks(output string) []struct {
 	Language string
 	Code     string

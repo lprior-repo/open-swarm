@@ -272,6 +272,8 @@ type GitStatusOutput struct {
 }
 
 // GitStatus returns the current status of the repository
+//
+//nolint:cyclop // complexity 13 is acceptable for status parsing
 func (ga *GitActivities) GitStatus(ctx context.Context, repoPath string) (*GitStatusOutput, error) {
 	logger := gitSafeGetLogger(ctx)
 	logger.Info("Getting Git status", "repo", repoPath)

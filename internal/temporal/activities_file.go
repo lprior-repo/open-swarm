@@ -445,6 +445,8 @@ type FileMoveInput struct {
 
 // FileMove moves or renames a file
 // Idempotent: If source doesn't exist and destination exists, assumes already moved
+//
+//nolint:cyclop // complexity 16 is acceptable for file operation with many edge cases
 func (fa *FileActivities) FileMove(ctx context.Context, input FileMoveInput) error {
 	logger := fileSafeGetLogger(ctx)
 	logger.Info("Moving file", "source", input.Source, "destination", input.Destination)

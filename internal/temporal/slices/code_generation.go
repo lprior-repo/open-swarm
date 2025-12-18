@@ -42,6 +42,69 @@ func NewCodeGenerationActivities() *CodeGenerationActivities {
 	return &CodeGenerationActivities{}
 }
 
+// codeGenParams holds parameters for code generation operations.
+type codeGenParams struct {
+	gateName      string
+	agentName     string
+	titlePrefix   string
+	heartbeatMsg  string
+	logStartMsg   string
+	logCompleteMsg string
+	errorMsg      string
+	successMsgFmt string
+	promptBuilder func(TaskInput) string
+}
+
+// generateCode is a helper that handles common code generation logic.
+func (c *CodeGenerationActivities) generateCode(ctx context.Context, output BootstrapOutput, taskInput TaskInput, params codeGenParams) (*GateResult, error) {
+	logger := activity.GetLogger(ctx)
+	logger.Info(params.logStartMsg, "cellID", output.CellID, "taskID", taskInput.TaskID)
+
+	activity.RecordHeartbeat(ctx, params.heartbeatMsg)
+
+	startTime := time.Now()
+
+	client := ReconstructClient(output)
+	prompt := params.promptBuilder(taskInput)
+
+	result, err := client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
+		Agent: "build",
+		Title: fmt.Sprintf("%s - %s", params.titlePrefix, taskInput.TaskID),
+	})
+	if err != nil {
+		return &GateResult{
+			GateName:      params.gateName,
+			Passed:        false,
+			Duration:      time.Since(startTime),
+			Error:         err.Error(),
+			RetryAttempts: 0,
+		}, fmt.Errorf("%s in cell %q: %w", params.errorMsg, output.CellID, err)
+	}
+
+	duration := time.Since(startTime)
+	filesModified := extractModifiedFiles(result)
+
+	logger.Info(params.logCompleteMsg,
+		"cellID", output.CellID,
+		"filesModified", len(filesModified),
+		"duration", duration)
+
+	return &GateResult{
+		GateName: params.gateName,
+		Passed:   true,
+		Duration: duration,
+		Message:  fmt.Sprintf(params.successMsgFmt, taskInput.TaskID, len(filesModified)),
+		AgentResults: []AgentResult{{
+			AgentName:    params.agentName,
+			Prompt:       prompt,
+			Response:     result.GetText(),
+			Success:      true,
+			Duration:     duration,
+			FilesChanged: filesModified,
+		}},
+	}, nil
+}
+
 // GenerateTests generates test code (TDD RED phase - Gate 1)
 //
 // This activity implements the first gate of Enhanced TCR:
@@ -51,58 +114,17 @@ func NewCodeGenerationActivities() *CodeGenerationActivities {
 //
 // Returns GateResult indicating success/failure of test generation.
 func (c *CodeGenerationActivities) GenerateTests(ctx context.Context, output BootstrapOutput, taskInput TaskInput) (*GateResult, error) {
-	logger := activity.GetLogger(ctx)
-	logger.Info("Generating tests", "cellID", output.CellID, "taskID", taskInput.TaskID)
-
-	activity.RecordHeartbeat(ctx, "generating test code")
-
-	startTime := time.Now()
-
-	// Reconstruct SDK client
-	client := ReconstructClient(output)
-
-	// Build prompt for test generation
-	prompt := buildTestGenerationPrompt(taskInput)
-
-	// Execute test generation via SDK
-	result, err := client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
-		Agent: "build",
-		Title: fmt.Sprintf("Generate Tests - %s", taskInput.TaskID),
+	return c.generateCode(ctx, output, taskInput, codeGenParams{
+		gateName:       "generate_tests",
+		agentName:      "test-generator",
+		titlePrefix:    "Generate Tests",
+		heartbeatMsg:   "generating test code",
+		logStartMsg:    "Generating tests",
+		logCompleteMsg: "Test generation completed",
+		errorMsg:       "failed to generate tests",
+		successMsgFmt:  "Generated tests for %s (%d files modified)",
+		promptBuilder:  buildTestGenerationPrompt,
 	})
-	if err != nil {
-		return &GateResult{
-			GateName:      "generate_tests",
-			Passed:        false,
-			Duration:      time.Since(startTime),
-			Error:         err.Error(),
-			RetryAttempts: 0,
-		}, fmt.Errorf("failed to generate tests in cell %q: %w", output.CellID, err)
-	}
-
-	duration := time.Since(startTime)
-
-	// Extract files modified from tool results
-	filesModified := extractModifiedFiles(result)
-
-	logger.Info("Test generation completed",
-		"cellID", output.CellID,
-		"filesModified", len(filesModified),
-		"duration", duration)
-
-	return &GateResult{
-		GateName: "generate_tests",
-		Passed:   true,
-		Duration: duration,
-		Message:  fmt.Sprintf("Generated tests for %s (%d files modified)", taskInput.TaskID, len(filesModified)),
-		AgentResults: []AgentResult{{
-			AgentName:    "test-generator",
-			Prompt:       prompt,
-			Response:     result.GetText(),
-			Success:      true,
-			Duration:     duration,
-			FilesChanged: filesModified,
-		}},
-	}, nil
 }
 
 // GenerateImplementation generates implementation code (TDD GREEN phase - Gate 4)
@@ -114,58 +136,17 @@ func (c *CodeGenerationActivities) GenerateTests(ctx context.Context, output Boo
 //
 // Returns GateResult indicating success/failure of implementation generation.
 func (c *CodeGenerationActivities) GenerateImplementation(ctx context.Context, output BootstrapOutput, taskInput TaskInput) (*GateResult, error) {
-	logger := activity.GetLogger(ctx)
-	logger.Info("Generating implementation", "cellID", output.CellID, "taskID", taskInput.TaskID)
-
-	activity.RecordHeartbeat(ctx, "generating implementation code")
-
-	startTime := time.Now()
-
-	// Reconstruct SDK client
-	client := ReconstructClient(output)
-
-	// Build prompt for implementation generation
-	prompt := buildImplementationPrompt(taskInput)
-
-	// Execute implementation generation via SDK
-	result, err := client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
-		Agent: "build",
-		Title: fmt.Sprintf("Generate Implementation - %s", taskInput.TaskID),
+	return c.generateCode(ctx, output, taskInput, codeGenParams{
+		gateName:       "generate_implementation",
+		agentName:      "implementation-generator",
+		titlePrefix:    "Generate Implementation",
+		heartbeatMsg:   "generating implementation code",
+		logStartMsg:    "Generating implementation",
+		logCompleteMsg: "Implementation generation completed",
+		errorMsg:       "failed to generate implementation",
+		successMsgFmt:  "Generated implementation for %s (%d files modified)",
+		promptBuilder:  buildImplementationPrompt,
 	})
-	if err != nil {
-		return &GateResult{
-			GateName:      "generate_implementation",
-			Passed:        false,
-			Duration:      time.Since(startTime),
-			Error:         err.Error(),
-			RetryAttempts: 0,
-		}, fmt.Errorf("failed to generate implementation in cell %q: %w", output.CellID, err)
-	}
-
-	duration := time.Since(startTime)
-
-	// Extract files modified from tool results
-	filesModified := extractModifiedFiles(result)
-
-	logger.Info("Implementation generation completed",
-		"cellID", output.CellID,
-		"filesModified", len(filesModified),
-		"duration", duration)
-
-	return &GateResult{
-		GateName: "generate_implementation",
-		Passed:   true,
-		Duration: duration,
-		Message:  fmt.Sprintf("Generated implementation for %s (%d files modified)", taskInput.TaskID, len(filesModified)),
-		AgentResults: []AgentResult{{
-			AgentName:    "implementation-generator",
-			Prompt:       prompt,
-			Response:     result.GetText(),
-			Success:      true,
-			Duration:     duration,
-			FilesChanged: filesModified,
-		}},
-	}, nil
 }
 
 // ExecuteGenericTask executes a generic code generation task

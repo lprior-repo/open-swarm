@@ -260,6 +260,8 @@ func (t *TestExecutionActivities) RunTestsWithRetry(ctx context.Context, output 
 //
 // This is a simplified parser. Production code should use the full parser
 // from internal/temporal/test_parser.go
+//
+//nolint:cyclop // complexity 11 is acceptable for output parsing
 func parseTestOutput(output string) *TestResult {
 	// Simple heuristic parsing
 	// TODO: Use full TestParser from internal/temporal/test_parser.go

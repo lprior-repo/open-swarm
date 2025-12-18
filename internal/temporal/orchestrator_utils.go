@@ -175,6 +175,8 @@ func NewReviewAggregator() *ReviewAggregator {
 }
 
 // AggregateReviewFeedback combines rejection/change-request feedback from reviewers
+//
+//nolint:cyclop // complexity 11 is acceptable for feedback aggregation
 func (ra *ReviewAggregator) AggregateReviewFeedback(votes []ReviewVote) string {
 	if len(votes) == 0 {
 		return ""

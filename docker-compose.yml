@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: temporal
       POSTGRES_DB: temporal
     ports:
-      - "5433:5432"
+      - "5435:5432"
     volumes:
       - postgresql-data:/var/lib/postgresql/data
     healthcheck:
