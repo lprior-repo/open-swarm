@@ -1,0 +1,312 @@
+version: '3'
+
+vars:
+  BIN_DIR: ./bin
+  WORKER_BIN: '{{.BIN_DIR}}/temporal-worker'
+  BENCHMARK_BIN: '{{.BIN_DIR}}/benchmark-tcr'
+  DOCKER_COMPOSE: docker compose
+  GOPATH:
+    sh: go env GOPATH
+  GOLANGCI_LINT: '{{.GOPATH}}/bin/golangci-lint'
+  GOLANGCI_LINT_VERSION: v2.7.2
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list-all
+
+  # BUILD ======================================================================
+
+  build:
+    desc: Build all binaries
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - go build -o {{.WORKER_BIN}} ./cmd/temporal-worker
+      - go build -o {{.BENCHMARK_BIN}} ./cmd/benchmark-tcr
+      - echo "Built worker and benchmark binaries"
+    sources:
+      - cmd/**/*.go
+      - internal/**/*.go
+      - pkg/**/*.go
+    generates:
+      - "{{.WORKER_BIN}}"
+      - "{{.BENCHMARK_BIN}}"
+
+  build:worker:
+    desc: Build only the worker binary
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - go build -o {{.WORKER_BIN}} ./cmd/temporal-worker
+
+  build:benchmark:
+    desc: Build only the benchmark binary
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - go build -o {{.BENCHMARK_BIN}} ./cmd/benchmark-tcr
+
+  # INFRASTRUCTURE =============================================================
+
+  infra:up:
+    desc: Start Temporal + PostgreSQL + UI
+    cmds:
+      - "{{.DOCKER_COMPOSE}} up -d"
+      - sleep 5
+      - echo "Core infrastructure started"
+      - echo "  Temporal UI - http://localhost:8081"
+      - echo "  PostgreSQL  - localhost:5435"
+
+  infra:down:
+    desc: Stop core infrastructure
+    cmds:
+      - "{{.DOCKER_COMPOSE}} down"
+
+  infra:status:
+    desc: Show infrastructure status
+    cmds:
+      - "{{.DOCKER_COMPOSE}} ps"
+
+  infra:logs:
+    desc: Tail infrastructure logs
+    cmds:
+      - "{{.DOCKER_COMPOSE}} logs -f"
+
+  otel:up:
+    desc: Start observability stack (OTEL + Jaeger + Prometheus + Grafana)
+    cmds:
+      - mkdir -p otel-data
+      - "{{.DOCKER_COMPOSE}} -f docker-compose.otel.yml up -d"
+      - sleep 5
+      - echo "Observability started"
+      - echo "  Jaeger     - http://localhost:16686"
+      - echo "  Grafana    - http://localhost:3001 (admin/admin)"
+      - echo "  Prometheus - http://localhost:9090"
+
+  otel:down:
+    desc: Stop observability stack
+    cmds:
+      - "{{.DOCKER_COMPOSE}} -f docker-compose.otel.yml down"
+
+  monitoring:up:
+    desc: Start monitoring stack (Prometheus + Grafana + Node Exporter)
+    cmds:
+      - "{{.DOCKER_COMPOSE}} -f docker-compose.yml -f docker-compose.monitoring.yml up -d"
+
+  monitoring:down:
+    desc: Stop monitoring stack
+    cmds:
+      - "{{.DOCKER_COMPOSE}} -f docker-compose.yml -f docker-compose.monitoring.yml down"
+
+  up:
+    desc: Start all infrastructure (core + observability)
+    cmds:
+      - task: infra:up
+      - task: otel:up
+
+  down:
+    desc: Stop all infrastructure
+    cmds:
+      - task: otel:down
+      - task: infra:down
+
+  # WORKER =====================================================================
+
+  worker:
+    desc: Start worker (foreground)
+    deps: [build:worker, infra:up]
+    cmds:
+      - "{{.WORKER_BIN}}"
+
+  worker:bg:
+    desc: Start worker (background)
+    deps: [build:worker, infra:up]
+    cmds:
+      - pkill -f "temporal-worker" 2>/dev/null || true
+      - sleep 1
+      - nohup {{.WORKER_BIN}} > /tmp/temporal-worker.log 2>&1 &
+      - sleep 3
+      - pgrep -f "temporal-worker" && echo "Worker started - logs at /tmp/temporal-worker.log"
+
+  worker:stop:
+    desc: Stop worker and OpenCode servers
+    cmds:
+      - pkill -f "temporal-worker" 2>/dev/null || echo "Worker not running"
+      - pkill -f "opencode serve" 2>/dev/null || echo "No OpenCode servers"
+
+  worker:logs:
+    desc: Tail worker logs
+    cmds:
+      - tail -f /tmp/temporal-worker.log
+
+  # TESTING ====================================================================
+
+  test:
+    desc: Run all tests
+    cmds:
+      - go test -v ./...
+
+  test:race:
+    desc: Run tests with race detector
+    cmds:
+      - go test -v -race ./...
+
+  test:coverage:
+    desc: Generate HTML coverage report
+    cmds:
+      - go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      - go tool cover -func=coverage.out | tail -1
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo "Coverage report generated at coverage.html"
+
+  test:temporal:
+    desc: Run Temporal workflow tests
+    cmds:
+      - go test -v ./internal/temporal/...
+
+  test:tdd:
+    desc: Run tests with TDD Guard reporter
+    cmds:
+      - go test -json ./... 2>&1 | {{.GOPATH}}/bin/tdd-guard-go -project-root $(pwd)
+
+  test:bootstrap:
+    desc: Test cell bootstrap functionality
+    deps: [build, infra:up]
+    cmds:
+      - go run ./cmd/test-bootstrap
+
+  # LINTING ====================================================================
+
+  fmt:
+    desc: Format code with gofmt
+    cmds:
+      - go fmt ./...
+
+  lint:
+    desc: Run golangci-lint
+    deps: [tools:lint]
+    cmds:
+      - "{{.GOLANGCI_LINT}} run --timeout=5m"
+
+  lint:fix:
+    desc: Run golangci-lint with auto-fix
+    deps: [tools:lint]
+    cmds:
+      - "{{.GOLANGCI_LINT}} run --fix --timeout=5m"
+
+  # CI =========================================================================
+
+  ci:
+    desc: Run all CI checks (fmt, lint, test, race)
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: test
+      - task: test:race
+      - echo "All CI checks passed"
+
+  # BENCHMARKS =================================================================
+
+  bench:
+    desc: "Run benchmark (STRATEGY=basic|enhanced RUNS=3 PROMPT=...)"
+    deps: [worker:bg]
+    vars:
+      STRATEGY: '{{.STRATEGY | default "basic"}}'
+      RUNS: '{{.RUNS | default "3"}}'
+      PROMPT: '{{.PROMPT | default "Implement a simple calculator"}}'
+    cmds:
+      - echo "Running {{.STRATEGY}} benchmark with {{.RUNS}} runs"
+      - go run ./cmd/benchmark-tcr -strategy {{.STRATEGY}} -runs {{.RUNS}} -prompt '{{.PROMPT}}'
+
+  bench:basic:
+    desc: Run basic TCR benchmark
+    deps: [worker:bg]
+    vars:
+      RUNS: '{{.RUNS | default "3"}}'
+      PROMPT: '{{.PROMPT}}'
+    cmds:
+      - go run ./cmd/benchmark-tcr -strategy basic -runs {{.RUNS}} -prompt '{{.PROMPT}}'
+
+  bench:enhanced:
+    desc: Run enhanced TCR benchmark
+    deps: [worker:bg]
+    vars:
+      RUNS: '{{.RUNS | default "3"}}'
+      PROMPT: '{{.PROMPT}}'
+    cmds:
+      - go run ./cmd/benchmark-tcr -strategy enhanced -runs {{.RUNS}} -prompt '{{.PROMPT}}'
+
+  bench:compare:
+    desc: "Compare basic vs enhanced (RUNS=3 PROMPT=...)"
+    deps: [worker:bg]
+    vars:
+      RUNS: '{{.RUNS | default "3"}}'
+      PROMPT: '{{.PROMPT | default "Implement a simple calculator"}}'
+    cmds:
+      - echo "=== BASIC STRATEGY ==="
+      - go run ./cmd/benchmark-tcr -strategy basic -runs {{.RUNS}} -prompt '{{.PROMPT}}' 2>&1 | tee /tmp/bench-basic.log
+      - echo ""
+      - echo "=== ENHANCED STRATEGY ==="
+      - go run ./cmd/benchmark-tcr -strategy enhanced -runs {{.RUNS}} -prompt '{{.PROMPT}}' 2>&1 | tee /tmp/bench-enhanced.log
+      - echo ""
+      - echo "Results saved to /tmp/bench-basic.log and /tmp/bench-enhanced.log"
+
+  # TOOLS ======================================================================
+
+  tools:
+    desc: Install all development tools
+    cmds:
+      - task: tools:lint
+      - go install golang.org/x/tools/cmd/goimports@latest
+
+  tools:lint:
+    desc: Install golangci-lint
+    status:
+      - test -x {{.GOLANGCI_LINT}}
+    cmds:
+      - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b {{.GOPATH}}/bin {{.GOLANGCI_LINT_VERSION}}
+
+  # CLEANUP ====================================================================
+
+  clean:
+    desc: Clean build artifacts and temp files
+    cmds:
+      - task: worker:stop
+      - rm -rf {{.BIN_DIR}}
+      - rm -rf worktrees/cell-*
+      - rm -f coverage.out coverage.html
+      - rm -f /tmp/temporal-worker.log /tmp/bench-*.log
+      - go clean
+      - echo "Cleaned"
+
+  clean:all:
+    desc: Full cleanup including Docker volumes
+    cmds:
+      - task: clean
+      - task: down
+      - docker volume rm postgresql-data prometheus-data grafana-data 2>/dev/null || true
+      - rm -rf otel-data
+
+  # UI =========================================================================
+
+  ui:
+    desc: Open Temporal UI in browser
+    cmds:
+      - xdg-open http://localhost:8081 2>/dev/null || open http://localhost:8081 2>/dev/null || echo "Open http://localhost:8081"
+
+  ui:grafana:
+    desc: Open Grafana in browser
+    cmds:
+      - xdg-open http://localhost:3001 2>/dev/null || open http://localhost:3001 2>/dev/null || echo "Open http://localhost:3001"
+
+  ui:jaeger:
+    desc: Open Jaeger in browser
+    cmds:
+      - xdg-open http://localhost:16686 2>/dev/null || open http://localhost:16686 2>/dev/null || echo "Open http://localhost:16686"
+
+  verify:
+    desc: Verify all services are healthy
+    cmds:
+      - echo "Checking services..."
+      - docker ps --filter "name=open-swarm" --format "table {{`{{.Names}}`}}\t{{`{{.Status}}`}}"
+      - echo ""
+      - pgrep -f "temporal-worker" > /dev/null && echo "Worker running" || echo "Worker not running"

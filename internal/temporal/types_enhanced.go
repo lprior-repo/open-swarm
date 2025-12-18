@@ -15,6 +15,8 @@ type EnhancedTCRInput struct {
 	Description        string
 	AcceptanceCriteria string
 	ReviewersCount     int // Default: 3 (unanimous vote required)
+	MaxRetries         int // Default: 2 - max full regeneration attempts
+	MaxFixAttempts     int // Default: 5 - max targeted fix attempts per regeneration
 }
 
 // EnhancedTCRResult contains the complete result of the Enhanced TCR workflow

@@ -114,6 +114,7 @@ func main() {
 	w.RegisterActivity(enhancedActivities.ExecuteLintTest)
 	w.RegisterActivity(enhancedActivities.ExecuteVerifyRED)
 	w.RegisterActivity(enhancedActivities.ExecuteGenImpl)
+	w.RegisterActivity(enhancedActivities.ExecuteFixFromFeedback)
 	w.RegisterActivity(enhancedActivities.ExecuteVerifyGREEN)
 	w.RegisterActivity(enhancedActivities.ExecuteMultiReview)
 	w.RegisterActivity(shellActivities.RunScript)

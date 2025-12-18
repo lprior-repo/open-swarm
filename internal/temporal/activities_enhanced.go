@@ -9,7 +9,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -471,7 +473,7 @@ func (ea *EnhancedActivities) ExecuteGenImpl(ctx context.Context, bootstrap *Boo
 
 	// Convert taskID to lowercase package name for Go conventions
 	packageName := strings.ToLower(taskID)
-	
+
 	promptBuilder.WriteString(fmt.Sprintf(`Implement the solution for task: %s
 
 IMPORTANT: Create the implementation file at: pkg/%s/%s.go
@@ -537,7 +539,122 @@ Requirements:
 	}, nil
 }
 
+// ExecuteFixFromFeedback - Targeted Fix Gate: Apply surgical fixes based on feedback
+// Unlike ExecuteGenImpl which regenerates from scratch, this activity:
+// 1. Reads the current implementation
+// 2. Analyzes the specific feedback (test failures or reviewer comments)
+// 3. Makes minimal, targeted changes to address the issues
+// 4. Preserves all working code
+//
+// Use this for iterative improvements after VerifyGREEN or MultiReview failures.
+func (ea *EnhancedActivities) ExecuteFixFromFeedback(ctx context.Context, bootstrap *BootstrapOutput, taskID string, feedback string) (*GateResult, error) {
+	ctx, span := telemetry.StartSpan(ctx, "activity.enhanced", "ExecuteFixFromFeedback",
+		trace.WithAttributes(telemetry.TCRAttrs("", taskID)...),
+	)
+	defer span.End()
+
+	logger := activity.GetLogger(ctx)
+	logger.Info("Gate: FixFromFeedback", "taskID", taskID, "feedback_length", len(feedback))
+
+	startTime := time.Now()
+	telemetry.AddEvent(ctx, "gate.start", telemetry.AttrGateName.String("fix_from_feedback"))
+	cellActivities := NewCellActivities()
+	cell := cellActivities.reconstructCell(bootstrap)
+
+	// Convert taskID to lowercase package name for Go conventions
+	packageName := strings.ToLower(taskID)
+	implFilePath := fmt.Sprintf("pkg/%s/%s.go", packageName, packageName)
+
+	// Read current implementation from filesystem
+	fullPath := filepath.Join(bootstrap.WorktreePath, implFilePath)
+	currentCodeBytes, err := os.ReadFile(fullPath) //nolint:gosec // Path is constructed from trusted inputs
+	currentCode := ""
+	if err != nil {
+		logger.Warn("Could not read current implementation, will generate fresh", "error", err, "path", fullPath)
+	} else {
+		currentCode = string(currentCodeBytes)
+	}
+
+	// Build targeted fix prompt
+	var prompt string
+	if currentCode != "" {
+		prompt = fmt.Sprintf(`You are fixing existing code based on feedback.
+
+CURRENT IMPLEMENTATION in %s:
+%s
+
+FEEDBACK TO ADDRESS:
+%s
+
+INSTRUCTIONS:
+- Make MINIMAL changes to fix the specific issues in the feedback
+- Preserve all working functionality
+- Only modify code directly related to the feedback
+- Do NOT rewrite the entire file from scratch
+- Keep the same file path: %s
+- Keep the same package name: %s
+
+Focus on surgical fixes, not full rewrites.`, implFilePath, currentCode, feedback, implFilePath, packageName)
+	} else {
+		// Fallback to generation if no existing code
+		prompt = fmt.Sprintf(`Generate implementation for task: %s
+
+The previous implementation failed with this feedback:
+%s
+
+Create the implementation file at: %s
+Package name: %s
+
+Address the feedback in your implementation.`, taskID, feedback, implFilePath, packageName)
+	}
+
+	result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
+		Title: fmt.Sprintf("FixFromFeedback: %s", taskID),
+		Agent: "implementation",
+		Model: "anthropic/claude-haiku-4-5",
+	})
+
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "fix from feedback failed")
+		telemetry.AddEvent(ctx, "gate.failed", telemetry.AttrGateName.String("fix_from_feedback"))
+		return newFailedGateResult("fix_from_feedback", err, startTime), err
+	}
+
+	filesChanged := getChangedFiles(ctx, cell)
+
+	span.SetAttributes(
+		telemetry.AttrGateName.String("fix_from_feedback"),
+		telemetry.AttrGatePassed.Bool(true),
+		attribute.Int("files.changed", len(filesChanged)),
+	)
+	telemetry.AddEvent(ctx, "gate.passed",
+		telemetry.AttrGateName.String("fix_from_feedback"),
+		attribute.Int("files.changed", len(filesChanged)),
+	)
+	span.SetStatus(codes.Ok, "fix from feedback completed")
+
+	return &GateResult{
+		GateName: "fix_from_feedback",
+		Passed:   true,
+		AgentResults: []AgentResult{
+			{
+				AgentName:    "implementation",
+				Model:        "anthropic/claude-haiku-4-5",
+				Prompt:       prompt,
+				Response:     result.GetText(),
+				Success:      true,
+				Duration:     time.Since(startTime),
+				FilesChanged: filesChanged,
+			},
+		},
+		Duration: time.Since(startTime),
+	}, nil
+}
+
 // ExecuteVerifyGREEN - Gate 5: Verify tests pass (GREEN phase)
+//
+//nolint:cyclop // Verification requires multiple validation paths
 func (ea *EnhancedActivities) ExecuteVerifyGREEN(ctx context.Context, bootstrap *BootstrapOutput, taskID string) (*GateResult, error) {
 	ctx, span := telemetry.StartSpan(ctx, "activity.enhanced", "ExecuteVerifyGREEN")
 	defer span.End()
