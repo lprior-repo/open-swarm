@@ -6,10 +6,8 @@
 package temporal
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -294,29 +292,37 @@ func (ea *EnhancedActivities) ExecuteVerifyRED(ctx context.Context, bootstrap *B
 
 	startTime := time.Now()
 	telemetry.AddEvent(ctx, "gate.start", telemetry.AttrGateName.String("verify_red"))
+	cellActivities := NewCellActivities()
+	cell := cellActivities.reconstructCell(bootstrap)
 
 	// Run tests ONLY for the task-specific test file
 	// This ensures we're testing just the newly created tests, not all 32+ test files in the repo
 	testPattern := fmt.Sprintf("./pkg/%s/...", strings.ToLower(taskID))
-	logger.Info("Running task-specific tests", "pattern", testPattern, "workdir", bootstrap.WorktreePath)
+	logger.Info("Running task-specific tests", "pattern", testPattern)
+	
+	// Use ExecutePrompt to run tests, but EXPLICITLY tell LLM to only report output without modifying code
+	verifyPrompt := fmt.Sprintf(`IMPORTANT: You must ONLY run the test command and report its output. 
+DO NOT create, modify, or write ANY code files.
+DO NOT implement any functions.
+DO NOT fix any failing tests.
 
-	// Run go test directly via os/exec - bypasses LLM entirely
-	// This is critical: LLMs ignore instructions not to write code
-	cmd := exec.CommandContext(ctx, "go", "test", "-v", testPattern)
-	cmd.Dir = bootstrap.WorktreePath
+Just run this command and show me the raw output:
+go test -v %s
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+If the tests fail, that is expected and correct. Report the failure output.`, testPattern)
 
-	err := cmd.Run()
-	// Note: go test returns non-zero exit code when tests fail, which is expected for VerifyRED
-	// We capture the output regardless of exit code
-
-	output := stdout.String() + stderr.String()
-
+	promptResult, err := cell.Client.ExecutePrompt(ctx, verifyPrompt, &agent.PromptOptions{
+		Title: fmt.Sprintf("VerifyRED: %s", taskID),
+		Model: "anthropic/claude-haiku-4-5",
+	})
+	
+	output := ""
+	if promptResult != nil {
+		output = promptResult.GetText()
+	}
+	
 	// Debug: Log the raw output for troubleshooting
-	logger.Info("Test output received", "output_length", len(output), "exit_error", err)
+	logger.Info("Test output received", "output_length", len(output), "error", err)
 	if len(output) > 0 {
 		// Log first 500 chars of output for debugging
 		logOutput := output
@@ -506,36 +512,33 @@ func (ea *EnhancedActivities) ExecuteVerifyGREEN(ctx context.Context, bootstrap 
 
 	startTime := time.Now()
 	telemetry.AddEvent(ctx, "gate.start", telemetry.AttrGateName.String("verify_green"))
+	cellActivities := NewCellActivities()
+	cell := cellActivities.reconstructCell(bootstrap)
 
 	// Run tests ONLY for the task-specific test file
 	// This ensures we're testing just the newly created tests, not all 32+ test files in the repo
 	testPattern := fmt.Sprintf("./pkg/%s/...", strings.ToLower(taskID))
-	logger.Info("Running task-specific tests", "pattern", testPattern, "workdir", bootstrap.WorktreePath)
+	logger.Info("Running task-specific tests", "pattern", testPattern)
+	
+	// Use ExecutePrompt to run tests, but EXPLICITLY tell LLM to only report output without modifying code
+	verifyPrompt := fmt.Sprintf(`IMPORTANT: You must ONLY run the test command and report its output.
+DO NOT create, modify, or write ANY code files.
+DO NOT implement any functions.
+DO NOT fix any failing tests.
 
-	// Run go test directly via os/exec - bypasses LLM entirely
-	// This is critical: LLMs ignore instructions not to write code
-	cmd := exec.CommandContext(ctx, "go", "test", "-v", testPattern)
-	cmd.Dir = bootstrap.WorktreePath
+Just run this command and show me the raw output:
+go test -v %s
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+Report whether tests passed or failed.`, testPattern)
 
-	err := cmd.Run()
-	// Note: go test returns non-zero exit code when tests fail
-	// For VerifyGREEN, we want tests to pass (exit code 0)
-
-	output := stdout.String() + stderr.String()
-
-	// Debug: Log the raw output for troubleshooting
-	logger.Info("Test output received", "output_length", len(output), "exit_error", err)
-	if len(output) > 0 {
-		// Log first 500 chars of output for debugging
-		logOutput := output
-		if len(logOutput) > 500 {
-			logOutput = logOutput[:500] + "..."
-		}
-		logger.Debug("Test output preview", "output", logOutput)
+	promptResult, err := cell.Client.ExecutePrompt(ctx, verifyPrompt, &agent.PromptOptions{
+		Title: fmt.Sprintf("VerifyGREEN: %s", taskID),
+		Model: "anthropic/claude-haiku-4-5",
+	})
+	
+	output := ""
+	if promptResult != nil {
+		output = promptResult.GetText()
 	}
 
 	// Parse test output using TestParser
@@ -543,7 +546,6 @@ func (ea *EnhancedActivities) ExecuteVerifyGREEN(ctx context.Context, bootstrap 
 	parseResult := parser.ParseTestOutput(output)
 
 	// GREEN means all tests pass - no failures allowed
-	// err != nil means non-zero exit code (test failure)
 	testsPassed := err == nil && !parseResult.HasFailures
 
 	// Extract failed test names for detailed reporting
