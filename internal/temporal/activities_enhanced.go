@@ -299,10 +299,37 @@ func (ea *EnhancedActivities) ExecuteVerifyRED(ctx context.Context, bootstrap *B
 	// This ensures we're testing just the newly created tests, not all 32+ test files in the repo
 	testPattern := fmt.Sprintf("./pkg/%s/...", strings.ToLower(taskID))
 	logger.Info("Running task-specific tests", "pattern", testPattern)
-	result, _ := cell.Client.ExecuteCommand(ctx, "", "shell", []string{"go", "test", "-v", testPattern})
+	
+	// Use ExecutePrompt to run tests, but EXPLICITLY tell LLM to only report output without modifying code
+	verifyPrompt := fmt.Sprintf(`IMPORTANT: You must ONLY run the test command and report its output. 
+DO NOT create, modify, or write ANY code files.
+DO NOT implement any functions.
+DO NOT fix any failing tests.
+
+Just run this command and show me the raw output:
+go test -v %s
+
+If the tests fail, that is expected and correct. Report the failure output.`, testPattern)
+
+	promptResult, err := cell.Client.ExecutePrompt(ctx, verifyPrompt, &agent.PromptOptions{
+		Title: fmt.Sprintf("VerifyRED: %s", taskID),
+		Model: "anthropic/claude-haiku-4-5",
+	})
+	
 	output := ""
-	if result != nil {
-		output = result.GetText()
+	if promptResult != nil {
+		output = promptResult.GetText()
+	}
+	
+	// Debug: Log the raw output for troubleshooting
+	logger.Info("Test output received", "output_length", len(output), "error", err)
+	if len(output) > 0 {
+		// Log first 500 chars of output for debugging
+		logOutput := output
+		if len(logOutput) > 500 {
+			logOutput = logOutput[:500] + "..."
+		}
+		logger.Debug("Test output preview", "output", logOutput)
 	}
 
 	// Parse test output using TestParser
@@ -492,10 +519,26 @@ func (ea *EnhancedActivities) ExecuteVerifyGREEN(ctx context.Context, bootstrap 
 	// This ensures we're testing just the newly created tests, not all 32+ test files in the repo
 	testPattern := fmt.Sprintf("./pkg/%s/...", strings.ToLower(taskID))
 	logger.Info("Running task-specific tests", "pattern", testPattern)
-	result, err := cell.Client.ExecuteCommand(ctx, "", "shell", []string{"go", "test", "-v", testPattern})
+	
+	// Use ExecutePrompt to run tests, but EXPLICITLY tell LLM to only report output without modifying code
+	verifyPrompt := fmt.Sprintf(`IMPORTANT: You must ONLY run the test command and report its output.
+DO NOT create, modify, or write ANY code files.
+DO NOT implement any functions.
+DO NOT fix any failing tests.
+
+Just run this command and show me the raw output:
+go test -v %s
+
+Report whether tests passed or failed.`, testPattern)
+
+	promptResult, err := cell.Client.ExecutePrompt(ctx, verifyPrompt, &agent.PromptOptions{
+		Title: fmt.Sprintf("VerifyGREEN: %s", taskID),
+		Model: "anthropic/claude-haiku-4-5",
+	})
+	
 	output := ""
-	if result != nil {
-		output = result.GetText()
+	if promptResult != nil {
+		output = promptResult.GetText()
 	}
 
 	// Parse test output using TestParser
