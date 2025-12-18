@@ -151,9 +151,19 @@ func (ea *EnhancedActivities) ExecuteGenTest(ctx context.Context, bootstrap *Boo
 	cellActivities := NewCellActivities()
 	cell := cellActivities.reconstructCell(bootstrap)
 
-	// Execute agent to generate tests
 	// Convert taskID to lowercase package name for Go conventions
 	packageName := strings.ToLower(taskID)
+
+	// Create the test directory if it doesn't exist
+	testDir := filepath.Join(bootstrap.WorktreePath, "pkg", packageName)
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		logger.Error("Failed to create test directory", "path", testDir, "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to create test directory")
+		telemetry.AddEvent(ctx, "gate.failed", telemetry.AttrGateName.String("gen_test"))
+		return newFailedGateResult("gen_test", err, startTime), err
+	}
+
 	prompt := fmt.Sprintf(`Generate TEST FILE ONLY for task: %s
 
 IMPORTANT: Create the test file at: pkg/%s/%s_test.go
@@ -454,6 +464,19 @@ func (ea *EnhancedActivities) ExecuteGenImpl(ctx context.Context, bootstrap *Boo
 	cellActivities := NewCellActivities()
 	cell := cellActivities.reconstructCell(bootstrap)
 
+	// Convert taskID to lowercase package name for Go conventions
+	packageName := strings.ToLower(taskID)
+
+	// Create the implementation directory if it doesn't exist
+	implDir := filepath.Join(bootstrap.WorktreePath, "pkg", packageName)
+	if err := os.MkdirAll(implDir, 0755); err != nil {
+		logger.Error("Failed to create implementation directory", "path", implDir, "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to create implementation directory")
+		telemetry.AddEvent(ctx, "gate.failed", telemetry.AttrGateName.String("gen_impl"))
+		return newFailedGateResult("gen_impl", err, startTime), err
+	}
+
 	// Build base prompt
 	var promptBuilder strings.Builder
 
@@ -470,9 +493,6 @@ func (ea *EnhancedActivities) ExecuteGenImpl(ctx context.Context, bootstrap *Boo
 			logger.Info("GenImpl retry with test failure feedback", "failures", len(parseResult.Failures))
 		}
 	}
-
-	// Convert taskID to lowercase package name for Go conventions
-	packageName := strings.ToLower(taskID)
 
 	promptBuilder.WriteString(fmt.Sprintf(`Implement the solution for task: %s
 
