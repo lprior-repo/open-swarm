@@ -7,6 +7,29 @@ package temporal
 
 import "time"
 
+// BypassType represents the type of bypass lane for independent changes
+type BypassType string
+
+const (
+	// BypassTypeNone represents standard full TCR flow
+	BypassTypeNone BypassType = "none"
+	// BypassTypeDocumentation represents documentation-only changes
+	BypassTypeDocumentation BypassType = "documentation"
+	// BypassTypeConfiguration represents configuration-only changes
+	BypassTypeConfiguration BypassType = "configuration"
+	// BypassTypeFormatting represents formatting/comment-only changes
+	BypassTypeFormatting BypassType = "formatting"
+)
+
+// BypassEligibility represents bypass analysis results
+type BypassEligibility struct {
+	BypassType BypassType
+	Eligible   bool
+	Reason     string
+	FilesAffected []string
+	SkippedGates  []string // Gates that can be skipped
+}
+
 // EnhancedTCRInput defines input for the Enhanced 6-Gate TCR workflow
 type EnhancedTCRInput struct {
 	CellID             string
@@ -17,6 +40,8 @@ type EnhancedTCRInput struct {
 	ReviewersCount     int // Default: 3 (unanimous vote required)
 	MaxRetries         int // Default: 2 - max full regeneration attempts
 	MaxFixAttempts     int // Default: 5 - max targeted fix attempts per regeneration
+	FilesChanged       []string // Files changed in this PR (for bypass detection)
+	BypassPath         string   // Path to analyze for bypass eligibility (optional)
 }
 
 // EnhancedTCRResult contains the complete result of the Enhanced TCR workflow

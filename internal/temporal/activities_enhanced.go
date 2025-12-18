@@ -991,3 +991,80 @@ func getReviewerAgent(reviewType ReviewType) string {
 		return "reviewer"
 	}
 }
+
+// fileCounts represents the classification of files by type
+type fileCounts struct {
+	doc    int
+	config int
+	code   int
+}
+
+// classifyFiles counts files by category (docs, config, code)
+func classifyFiles(files []string) fileCounts {
+	docPatterns := []string{".md", ".txt", "docs/", "README", "CHANGELOG"}
+	configPatterns := []string{".yaml", ".yml", ".json", ".env", "config/", ".conf"}
+
+	counts := fileCounts{}
+	for _, file := range files {
+		if matchesPattern(file, docPatterns) {
+			counts.doc++
+		} else if matchesPattern(file, configPatterns) {
+			counts.config++
+		} else {
+			counts.code++
+		}
+	}
+	return counts
+}
+
+// matchesPattern checks if a file matches any pattern in a list
+func matchesPattern(file string, patterns []string) bool {
+	for _, pattern := range patterns {
+		if strings.Contains(file, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// DetectBypassEligibility analyzes file changes to determine bypass lane eligibility
+func DetectBypassEligibility(files []string) *BypassEligibility {
+	if len(files) == 0 {
+		return &BypassEligibility{
+			BypassType: BypassTypeNone,
+			Eligible:   false,
+			Reason:     "No files changed",
+		}
+	}
+
+	counts := classifyFiles(files)
+	totalFiles := len(files)
+	skippedGates := []string{"gen_test", "lint_test", "verify_red", "gen_impl", "verify_green"}
+
+	if counts.doc == totalFiles && counts.doc > 0 {
+		return &BypassEligibility{
+			BypassType:    BypassTypeDocumentation,
+			Eligible:      true,
+			Reason:        fmt.Sprintf("All %d files are documentation", counts.doc),
+			FilesAffected: files,
+			SkippedGates:  skippedGates,
+		}
+	}
+
+	if counts.config == totalFiles && counts.config > 0 {
+		return &BypassEligibility{
+			BypassType:    BypassTypeConfiguration,
+			Eligible:      true,
+			Reason:        fmt.Sprintf("All %d files are configuration", counts.config),
+			FilesAffected: files,
+			SkippedGates:  skippedGates,
+		}
+	}
+
+	return &BypassEligibility{
+		BypassType:    BypassTypeNone,
+		Eligible:      false,
+		Reason:        fmt.Sprintf("Mixed changes: %d docs, %d config, %d code files", counts.doc, counts.config, counts.code),
+		FilesAffected: files,
+	}
+}

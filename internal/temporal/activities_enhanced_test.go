@@ -119,3 +119,103 @@ FAIL    example.com/math  0.002s`
 		t.Error("Summary should contain TestSubtract")
 	}
 }
+
+// TestDetectBypassEligibility_Documentation verifies documentation-only changes
+func TestDetectBypassEligibility_Documentation(t *testing.T) {
+	files := []string{
+		"README.md",
+		"docs/architecture.md",
+		"CHANGELOG.md",
+	}
+
+	result := DetectBypassEligibility(files)
+
+	if result.BypassType != BypassTypeDocumentation {
+		t.Errorf("Expected BypassTypeDocumentation, got %s", result.BypassType)
+	}
+
+	if !result.Eligible {
+		t.Error("Documentation-only changes should be eligible for bypass")
+	}
+
+	if len(result.SkippedGates) != 5 {
+		t.Errorf("Expected 5 skipped gates for docs, got %d", len(result.SkippedGates))
+	}
+}
+
+// TestDetectBypassEligibility_Configuration verifies configuration-only changes
+func TestDetectBypassEligibility_Configuration(t *testing.T) {
+	files := []string{
+		"config/app.yaml",
+		".env.example",
+		"config/database.json",
+	}
+
+	result := DetectBypassEligibility(files)
+
+	if result.BypassType != BypassTypeConfiguration {
+		t.Errorf("Expected BypassTypeConfiguration, got %s", result.BypassType)
+	}
+
+	if !result.Eligible {
+		t.Error("Configuration-only changes should be eligible for bypass")
+	}
+
+	if len(result.SkippedGates) != 5 {
+		t.Errorf("Expected 5 skipped gates for config, got %d", len(result.SkippedGates))
+	}
+}
+
+// TestDetectBypassEligibility_MixedChanges verifies mixed changes are not eligible
+func TestDetectBypassEligibility_MixedChanges(t *testing.T) {
+	files := []string{
+		"README.md",
+		"internal/api/handler.go",
+		"config/app.yaml",
+	}
+
+	result := DetectBypassEligibility(files)
+
+	if result.BypassType != BypassTypeNone {
+		t.Errorf("Expected BypassTypeNone for mixed changes, got %s", result.BypassType)
+	}
+
+	if result.Eligible {
+		t.Error("Mixed changes should not be eligible for bypass")
+	}
+
+	if len(result.SkippedGates) != 0 {
+		t.Errorf("Expected no skipped gates for mixed changes, got %d", len(result.SkippedGates))
+	}
+}
+
+// TestDetectBypassEligibility_CodeOnly verifies code-only changes are not eligible
+func TestDetectBypassEligibility_CodeOnly(t *testing.T) {
+	files := []string{
+		"internal/api/handler.go",
+		"pkg/utils/helper.go",
+	}
+
+	result := DetectBypassEligibility(files)
+
+	if result.BypassType != BypassTypeNone {
+		t.Errorf("Expected BypassTypeNone for code changes, got %s", result.BypassType)
+	}
+
+	if result.Eligible {
+		t.Error("Code-only changes should not be eligible for bypass")
+	}
+}
+
+// TestDetectBypassEligibility_Empty verifies empty file list
+func TestDetectBypassEligibility_Empty(t *testing.T) {
+	result := DetectBypassEligibility([]string{})
+
+	if result.BypassType != BypassTypeNone {
+		t.Errorf("Expected BypassTypeNone for empty list, got %s", result.BypassType)
+	}
+
+	if result.Eligible {
+		t.Error("Empty file list should not be eligible for bypass")
+	}
+}
