@@ -148,16 +148,28 @@ func (ea *EnhancedActivities) ExecuteGenTest(ctx context.Context, bootstrap *Boo
 	cell := cellActivities.reconstructCell(bootstrap)
 
 	// Execute agent to generate tests
-	prompt := fmt.Sprintf(`Generate comprehensive tests for task: %s
+	prompt := fmt.Sprintf(`Generate TEST FILE ONLY for task: %s
 
 Acceptance Criteria:
 %s
 
-Requirements:
-- Write tests in Go using testing package
-- Cover all edge cases and error conditions
-- Follow TDD principles - tests should fail initially
-- Use table-driven tests where appropriate`, taskID, acceptanceCriteria)
+CRITICAL TDD REQUIREMENTS:
+- Create ONLY a _test.go file - DO NOT create any implementation
+- Tests must call functions that DO NOT EXIST YET
+- Tests MUST FAIL when run because the implementation does not exist
+- Use table-driven tests where appropriate
+- Cover edge cases and error conditions in your test cases
+
+Example structure:
+func TestHello(t *testing.T) {
+    // This test should FAIL initially because Hello() doesn't exist
+    result := Hello()
+    if result != "Hello, World!" {
+        t.Errorf("expected 'Hello, World!', got '%%s'", result)
+    }
+}
+
+DO NOT create the implementation file. Only create the test file.`, taskID, acceptanceCriteria)
 
 	result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 		Title: fmt.Sprintf("GenTest: %s", taskID),

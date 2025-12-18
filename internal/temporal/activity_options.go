@@ -19,7 +19,7 @@ const (
 
 	// DefaultHeartbeatTimeout is the standard heartbeat timeout
 	// Increased for LLM activities which can take several minutes
-	DefaultHeartbeatTimeout = 2 * time.Minute
+	DefaultHeartbeatTimeout = 5 * time.Minute
 
 	// CleanupStartToCloseTimeout is the timeout for cleanup/teardown operations
 	CleanupStartToCloseTimeout = 2 * time.Minute
