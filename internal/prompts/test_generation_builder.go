@@ -277,10 +277,10 @@ func (b *TestGenerationPromptBuilder) buildCoverageReport(sb *strings.Builder) {
 
 func (b *TestGenerationPromptBuilder) buildOutputInstructions(sb *strings.Builder) {
 	sb.WriteString("## Output Instructions\n\n")
-	sb.WriteString(fmt.Sprintf("- Write tests in %s\n", b.request.Language))
-	sb.WriteString(fmt.Sprintf("- Use %s framework\n", b.request.TestFramework))
-	sb.WriteString(fmt.Sprintf("- Output path: `%s`\n", b.request.OutputPath))
-	sb.WriteString(fmt.Sprintf("- Follow idiomatic %s conventions\n", b.request.Language))
+	fmt.Fprintf(sb, "FILE: %s\n\n", b.request.OutputPath)
+	fmt.Fprintf(sb, "- Write tests in %s\n", b.request.Language)
+	fmt.Fprintf(sb, "- Use %s framework\n", b.request.TestFramework)
+	fmt.Fprintf(sb, "- Follow idiomatic %s conventions\n", b.request.Language)
 	sb.WriteString("- Include proper error handling and edge cases\n")
 	sb.WriteString("- Add clear test descriptions and assertions\n\n")
 }
