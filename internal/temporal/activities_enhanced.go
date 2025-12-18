@@ -6,8 +6,10 @@
 package temporal
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -298,38 +300,71 @@ func (ea *EnhancedActivities) ExecuteVerifyRED(ctx context.Context, bootstrap *B
 	// Run tests ONLY for the task-specific test file
 	// This ensures we're testing just the newly created tests, not all 32+ test files in the repo
 	testPattern := fmt.Sprintf("./pkg/%s/...", strings.ToLower(taskID))
-	logger.Info("Running task-specific tests", "pattern", testPattern)
-	
-	// Use ExecutePrompt to run tests, but EXPLICITLY tell LLM to only report output without modifying code
-	verifyPrompt := fmt.Sprintf(`IMPORTANT: You must ONLY run the test command and report its output. 
-DO NOT create, modify, or write ANY code files.
-DO NOT implement any functions.
-DO NOT fix any failing tests.
+	logger.Info("Running task-specific tests", "pattern", testPattern, "workdir", bootstrap.WorktreePath)
 
-Just run this command and show me the raw output:
-go test -v %s
+	// STEP 1: Run go test directly via os/exec to get deterministic output
+	// This prevents the LLM from "helping" by writing code
+	cmd := exec.CommandContext(ctx, "go", "test", "-v", testPattern)
+	cmd.Dir = bootstrap.WorktreePath
 
-If the tests fail, that is expected and correct. Report the failure output.`, testPattern)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
-	promptResult, err := cell.Client.ExecutePrompt(ctx, verifyPrompt, &agent.PromptOptions{
-		Title: fmt.Sprintf("VerifyRED: %s", taskID),
+	testErr := cmd.Run()
+	testOutput := stdout.String() + stderr.String()
+
+	logger.Info("Test execution completed", "output_length", len(testOutput), "exit_error", testErr)
+
+	// STEP 2: Have LLM analyze the test output (read-only analysis, no code writing)
+	analysisPrompt := fmt.Sprintf(`Analyze the following Go test output and provide a summary.
+This is for the RED phase of TDD - we EXPECT tests to fail because the implementation doesn't exist yet.
+
+Test Command: go test -v %s
+Exit Status: %v
+
+Test Output:
+%s
+
+Please analyze:
+1. Did the tests fail as expected (compilation errors or test failures)?
+2. What functions/methods are missing that caused the failures?
+3. Is this a valid RED state for TDD?
+
+Remember: In TDD RED phase, failing tests are GOOD - they prove the test was written before the implementation.`, testPattern, testErr, testOutput)
+
+	promptResult, err := cell.Client.ExecutePrompt(ctx, analysisPrompt, &agent.PromptOptions{
+		Title: fmt.Sprintf("VerifyRED Analysis: %s", taskID),
 		Model: "anthropic/claude-haiku-4-5",
 	})
-	
-	output := ""
+
+	analysisOutput := ""
 	if promptResult != nil {
-		output = promptResult.GetText()
+		analysisOutput = promptResult.GetText()
 	}
-	
-	// Debug: Log the raw output for troubleshooting
-	logger.Info("Test output received", "output_length", len(output), "error", err)
+
+	// Use the raw test output for parsing, not the LLM analysis
+	output := testOutput
+
+	// Debug: Log outputs for troubleshooting
+	logger.Info("Test output received", "output_length", len(output), "analysis_length", len(analysisOutput))
 	if len(output) > 0 {
-		// Log first 500 chars of output for debugging
 		logOutput := output
 		if len(logOutput) > 500 {
 			logOutput = logOutput[:500] + "..."
 		}
 		logger.Debug("Test output preview", "output", logOutput)
+	}
+	if len(analysisOutput) > 0 {
+		logAnalysis := analysisOutput
+		if len(logAnalysis) > 300 {
+			logAnalysis = logAnalysis[:300] + "..."
+		}
+		logger.Debug("LLM analysis preview", "analysis", logAnalysis)
+	}
+	// Log any analysis error but don't fail the gate because of it
+	if err != nil {
+		logger.Warn("LLM analysis failed, using raw test output only", "error", err)
 	}
 
 	// Parse test output using TestParser
@@ -518,27 +553,71 @@ func (ea *EnhancedActivities) ExecuteVerifyGREEN(ctx context.Context, bootstrap 
 	// Run tests ONLY for the task-specific test file
 	// This ensures we're testing just the newly created tests, not all 32+ test files in the repo
 	testPattern := fmt.Sprintf("./pkg/%s/...", strings.ToLower(taskID))
-	logger.Info("Running task-specific tests", "pattern", testPattern)
-	
-	// Use ExecutePrompt to run tests, but EXPLICITLY tell LLM to only report output without modifying code
-	verifyPrompt := fmt.Sprintf(`IMPORTANT: You must ONLY run the test command and report its output.
-DO NOT create, modify, or write ANY code files.
-DO NOT implement any functions.
-DO NOT fix any failing tests.
+	logger.Info("Running task-specific tests", "pattern", testPattern, "workdir", bootstrap.WorktreePath)
 
-Just run this command and show me the raw output:
-go test -v %s
+	// STEP 1: Run go test directly via os/exec to get deterministic output
+	// This prevents the LLM from "helping" by modifying code
+	cmd := exec.CommandContext(ctx, "go", "test", "-v", testPattern)
+	cmd.Dir = bootstrap.WorktreePath
 
-Report whether tests passed or failed.`, testPattern)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
-	promptResult, err := cell.Client.ExecutePrompt(ctx, verifyPrompt, &agent.PromptOptions{
-		Title: fmt.Sprintf("VerifyGREEN: %s", taskID),
+	testErr := cmd.Run()
+	testOutput := stdout.String() + stderr.String()
+
+	logger.Info("Test execution completed", "output_length", len(testOutput), "exit_error", testErr)
+
+	// STEP 2: Have LLM analyze the test output (read-only analysis, no code writing)
+	analysisPrompt := fmt.Sprintf(`Analyze the following Go test output and provide a summary.
+This is for the GREEN phase of TDD - we EXPECT all tests to pass because implementation should be complete.
+
+Test Command: go test -v %s
+Exit Status: %v
+
+Test Output:
+%s
+
+Please analyze:
+1. Did all tests pass?
+2. If any tests failed, what were the failures?
+3. Is this a valid GREEN state for TDD (all tests passing)?
+
+Remember: In TDD GREEN phase, passing tests confirm the implementation is correct.`, testPattern, testErr, testOutput)
+
+	promptResult, err := cell.Client.ExecutePrompt(ctx, analysisPrompt, &agent.PromptOptions{
+		Title: fmt.Sprintf("VerifyGREEN Analysis: %s", taskID),
 		Model: "anthropic/claude-haiku-4-5",
 	})
-	
-	output := ""
+
+	analysisOutput := ""
 	if promptResult != nil {
-		output = promptResult.GetText()
+		analysisOutput = promptResult.GetText()
+	}
+
+	// Use the raw test output for parsing, not the LLM analysis
+	output := testOutput
+
+	// Debug: Log outputs for troubleshooting
+	logger.Info("Test output received", "output_length", len(output), "analysis_length", len(analysisOutput))
+	if len(output) > 0 {
+		logOutput := output
+		if len(logOutput) > 500 {
+			logOutput = logOutput[:500] + "..."
+		}
+		logger.Debug("Test output preview", "output", logOutput)
+	}
+	if len(analysisOutput) > 0 {
+		logAnalysis := analysisOutput
+		if len(logAnalysis) > 300 {
+			logAnalysis = logAnalysis[:300] + "..."
+		}
+		logger.Debug("LLM analysis preview", "analysis", logAnalysis)
+	}
+	// Log any analysis error but don't fail the gate because of it
+	if err != nil {
+		logger.Warn("LLM analysis failed, using raw test output only", "error", err)
 	}
 
 	// Parse test output using TestParser
@@ -546,7 +625,8 @@ Report whether tests passed or failed.`, testPattern)
 	parseResult := parser.ParseTestOutput(output)
 
 	// GREEN means all tests pass - no failures allowed
-	testsPassed := err == nil && !parseResult.HasFailures
+	// testErr != nil means non-zero exit code (test failure)
+	testsPassed := testErr == nil && !parseResult.HasFailures
 
 	// Extract failed test names for detailed reporting
 	failedTestNames := make([]string, 0, len(parseResult.Failures))
