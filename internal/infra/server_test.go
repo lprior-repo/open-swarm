@@ -19,8 +19,8 @@ func TestNewServerManager(t *testing.T) {
 	sm := NewServerManager()
 	assert.NotNil(t, sm)
 	assert.Equal(t, "opencode", sm.opencodeCommand)
-	assert.Equal(t, 10*time.Second, sm.healthTimeout)
-	assert.Equal(t, 200*time.Millisecond, sm.healthInterval)
+	assert.Equal(t, 30*time.Second, sm.healthTimeout)
+	assert.Equal(t, 500*time.Millisecond, sm.healthInterval)
 }
 
 func TestServerManager_SetOpencodeCommand(t *testing.T) {

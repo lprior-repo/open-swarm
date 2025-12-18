@@ -116,10 +116,90 @@
   "instructions": ["AGENTS.md", "CONTRIBUTING.md"],
 
   "agent": {
-    "validator": {
-      "description": "Validation engine using GPT-5.2 for rigorous code verification",
+    "test-generator": {
+      "description": "Test generation agent for Enhanced TCR Gate 1",
       "mode": "subagent",
-      "model": "github-copilot/claude-3.7-sonnet-thought",
+      "model": "github-copilot/claude-haiku-4.5",
+      "temperature": 0.3,
+      "max_steps": 50,
+      "tools": {
+        "write": true,
+        "edit": true,
+        "read": true,
+        "bash": true,
+        "glob": true,
+        "serena_*": true
+      },
+      "prompt": "You are a test-first development specialist. Your job is to write comprehensive, failing tests that define the expected behavior BEFORE any implementation exists. Follow TDD principles: write tests that fail for the right reasons (missing implementation), cover edge cases, use table-driven patterns for Go, and ensure high-quality test design."
+    },
+    "implementation": {
+      "description": "Implementation agent for Enhanced TCR Gate 4",
+      "mode": "subagent",
+      "model": "github-copilot/claude-haiku-4.5",
+      "temperature": 0.2,
+      "max_steps": 50,
+      "tools": {
+        "write": true,
+        "edit": true,
+        "read": true,
+        "bash": true,
+        "glob": true,
+        "serena_*": true
+      },
+      "prompt": "You are an implementation specialist. Given failing tests, write the minimal correct implementation that makes all tests pass. Follow Go best practices, write clean idiomatic code, handle errors properly, and ensure all tests pass before completing."
+    },
+    "reviewer-testing": {
+      "description": "Testing reviewer for Enhanced TCR Gate 6",
+      "mode": "subagent",
+      "model": "github-copilot/claude-haiku-4.5",
+      "temperature": 0.1,
+      "max_steps": 30,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "read": true,
+        "grep": true,
+        "glob": true,
+        "serena_*": true
+      },
+      "prompt": "You are a testing quality reviewer. Review code changes focusing on: test coverage completeness, edge case handling, proper mocking/stubbing, test isolation, determinism, and testing best practices. Vote APPROVE only if testing quality is excellent, otherwise REQUEST_CHANGE with specific feedback."
+    },
+    "reviewer-functional": {
+      "description": "Functional reviewer for Enhanced TCR Gate 6",
+      "mode": "subagent",
+      "model": "github-copilot/claude-haiku-4.5",
+      "temperature": 0.1,
+      "max_steps": 30,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "read": true,
+        "grep": true,
+        "glob": true,
+        "serena_*": true
+      },
+      "prompt": "You are a functional correctness reviewer. Review code changes focusing on: pure function design, side effect management, business logic correctness, input validation, and functional programming principles. Vote APPROVE only if functional quality is excellent, otherwise REQUEST_CHANGE with specific feedback."
+    },
+    "reviewer-architecture": {
+      "description": "Architecture reviewer for Enhanced TCR Gate 6",
+      "mode": "subagent",
+      "model": "github-copilot/claude-haiku-4.5",
+      "temperature": 0.1,
+      "max_steps": 30,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "read": true,
+        "grep": true,
+        "glob": true,
+        "serena_*": true
+      },
+      "prompt": "You are an architecture reviewer following KISS and YAGNI principles. Review code changes focusing on: simplicity, avoiding over-engineering, proper separation of concerns, dependency management, and clean architecture. Vote APPROVE only if the code is appropriately simple, otherwise REQUEST_CHANGE with specific feedback."
+    },
+    "validator": {
+      "description": "Validation engine for rigorous code verification",
+      "mode": "subagent",
+      "model": "github-copilot/claude-haiku-4.5",
       "temperature": 0.1,
       "max_steps": 50,
       "tools": {
@@ -129,7 +209,7 @@
         "bash": true,
         "serena_*": true
       },
-      "prompt": "You are a validation engine using GPT-5.2 for rigorous verification. Perform deep analysis of code correctness, security vulnerabilities, architectural soundness, test coverage, and requirement compliance. Use advanced reasoning to identify subtle bugs, edge cases, and potential issues."
+      "prompt": "You are a validation engine for rigorous verification. Perform deep analysis of code correctness, security vulnerabilities, architectural soundness, test coverage, and requirement compliance. Use careful reasoning to identify subtle bugs, edge cases, and potential issues."
     },
     "coordinator": {
       "description": "Multi-agent coordination specialist using Agent Mail",
@@ -213,8 +293,8 @@
 
   "command": {
     "validate": {
-      "description": "Deep validation using GPT-5.2",
-      "template": "Perform rigorous validation of $ARGUMENTS using GPT-5.2. Check: correctness, security vulnerabilities, edge cases, test coverage, architectural soundness, requirement compliance, and subtle bugs.",
+      "description": "Deep code validation",
+      "template": "Perform rigorous validation of $ARGUMENTS. Check: correctness, security vulnerabilities, edge cases, test coverage, architectural soundness, requirement compliance, and subtle bugs.",
       "agent": "validator"
     },
     "sync": {

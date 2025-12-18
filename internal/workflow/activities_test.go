@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"open-swarm/internal/agent"
@@ -50,9 +51,10 @@ func (m *mockPortManager) IsAllocated(port int) bool {
 }
 
 type mockServerManager struct {
-	bootFunc     func(ctx context.Context, path, id string, port int) (*infra.ServerHandle, error)
-	shutdownFunc func(handle *infra.ServerHandle) error
-	healthyFunc  func(ctx context.Context, handle *infra.ServerHandle) bool
+	bootFunc          func(ctx context.Context, path, id string, port int) (*infra.ServerHandle, error)
+	shutdownFunc      func(handle *infra.ServerHandle) error
+	shutdownByPIDFunc func(pid int) error
+	healthyFunc       func(ctx context.Context, handle *infra.ServerHandle) bool
 }
 
 func (m *mockServerManager) BootServer(ctx context.Context, path, id string, port int) (*infra.ServerHandle, error) {
@@ -69,6 +71,13 @@ func (m *mockServerManager) BootServer(ctx context.Context, path, id string, por
 func (m *mockServerManager) Shutdown(handle *infra.ServerHandle) error {
 	if m.shutdownFunc != nil {
 		return m.shutdownFunc(handle)
+	}
+	return nil
+}
+
+func (m *mockServerManager) ShutdownByPID(pid int) error {
+	if m.shutdownByPIDFunc != nil {
+		return m.shutdownByPIDFunc(pid)
 	}
 	return nil
 }
@@ -309,7 +318,7 @@ func TestTeardownCell_Success(t *testing.T) {
 		},
 	}
 	serverMgr := &mockServerManager{
-		shutdownFunc: func(_ *infra.ServerHandle) error {
+		shutdownByPIDFunc: func(_ int) error {
 			serverShutdown = true
 			return nil
 		},
@@ -359,7 +368,7 @@ func TestTeardownCell_PartialFailure(t *testing.T) {
 		},
 	}
 	serverMgr := &mockServerManager{
-		shutdownFunc: func(_ *infra.ServerHandle) error {
+		shutdownByPIDFunc: func(_ int) error {
 			return errors.New("shutdown failed")
 		},
 	}
@@ -376,7 +385,7 @@ func TestTeardownCell_PartialFailure(t *testing.T) {
 		CellID:       "test-cell",
 		Port:         8080,
 		WorktreeID:   "worktree-1",
-		ServerHandle: &infra.ServerHandle{},
+		ServerHandle: &infra.ServerHandle{PID: 12345},
 	}
 
 	err := activities.TeardownCell(context.Background(), cell)
@@ -507,7 +516,7 @@ func TestRunTests_Pass(t *testing.T) {
 
 func TestRunTests_Fail(t *testing.T) {
 	client := &mockClient{
-		executeCommandFunc: func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
+		executePromptFunc: func(ctx context.Context, prompt string, opts *agent.PromptOptions) (*agent.PromptResult, error) {
 			return &agent.PromptResult{
 				Parts: []agent.ResultPart{
 					{Type: "text", Text: "FAIL\nFAIL\tpackage\t0.001s"},
@@ -541,8 +550,8 @@ func TestRunTests_Fail(t *testing.T) {
 func TestCommitChanges_Success(t *testing.T) {
 	commitCalled := false
 	client := &mockClient{
-		executeCommandFunc: func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
-			if len(args) > 0 && args[0] == "git" {
+		executePromptFunc: func(ctx context.Context, prompt string, opts *agent.PromptOptions) (*agent.PromptResult, error) {
+			if strings.Contains(prompt, "git") {
 				commitCalled = true
 			}
 			return &agent.PromptResult{
@@ -578,8 +587,8 @@ func TestCommitChanges_Success(t *testing.T) {
 func TestRevertChanges_Success(t *testing.T) {
 	revertCalled := false
 	client := &mockClient{
-		executeCommandFunc: func(ctx context.Context, sessionID string, command string, args []string) (*agent.PromptResult, error) {
-			if len(args) > 0 && args[0] == "git" {
+		executePromptFunc: func(ctx context.Context, prompt string, opts *agent.PromptOptions) (*agent.PromptResult, error) {
+			if strings.Contains(prompt, "git") {
 				revertCalled = true
 			}
 			return &agent.PromptResult{

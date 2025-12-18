@@ -161,7 +161,7 @@ Requirements:
 
 	result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 		Title: fmt.Sprintf("GenTest: %s", taskID),
-		Agent: "tester",
+		Agent: "test-generator",
 		Model: "github-copilot/claude-haiku-4.5",
 	})
 
@@ -190,7 +190,7 @@ Requirements:
 		Passed:   true,
 		AgentResults: []AgentResult{
 			{
-				AgentName:    "build",
+				AgentName:    "test-generator",
 				Model:        "github-copilot/claude-haiku-4.5",
 				Prompt:       prompt,
 				Response:     result.GetText(),
@@ -395,7 +395,7 @@ Requirements:
 
 	result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 		Title: fmt.Sprintf("GenImpl: %s", taskID),
-		Agent: "build",
+		Agent: "implementation",
 		Model: "github-copilot/claude-haiku-4.5",
 	})
 
@@ -424,7 +424,7 @@ Requirements:
 		Passed:   true,
 		AgentResults: []AgentResult{
 			{
-				AgentName:    "build",
+				AgentName:    "implementation",
 				Model:        "github-copilot/claude-haiku-4.5",
 				Prompt:       prompt,
 				Response:     result.GetText(),
@@ -554,7 +554,7 @@ Your review should focus on: %s`, taskID, description, reviewType, getReviewFocu
 
 		result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 			Title: fmt.Sprintf("Review %d (%s): %s", i+1, reviewType, taskID),
-			Agent: "build",
+			Agent: getReviewerAgent(reviewType),
 			Model: "github-copilot/claude-haiku-4.5",
 		})
 
@@ -674,5 +674,19 @@ func getReviewFocus(reviewType ReviewType) string {
 		return "design patterns, code structure, and long-term maintainability"
 	default:
 		return "overall code quality"
+	}
+}
+
+// Helper function to get the appropriate reviewer agent based on review type
+func getReviewerAgent(reviewType ReviewType) string {
+	switch reviewType {
+	case ReviewTypeTesting:
+		return "reviewer-testing"
+	case ReviewTypeFunctional:
+		return "reviewer-functional"
+	case ReviewTypeArchitecture:
+		return "reviewer-architecture"
+	default:
+		return "reviewer"
 	}
 }
