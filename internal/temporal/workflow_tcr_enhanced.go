@@ -171,7 +171,7 @@ func executeEnhancedTCRGates(executor *gateExecutor, enhancedActivities *Enhance
 	}
 
 	// GATE 3: VerifyRED - Tests Must Fail
-	if err := executor.executeGate("VerifyRED", enhancedActivities.ExecuteVerifyRED, bootstrap); err != nil {
+	if err := executor.executeGate("VerifyRED", enhancedActivities.ExecuteVerifyRED, bootstrap, input.TaskID); err != nil {
 		return err
 	}
 
@@ -182,7 +182,7 @@ func executeEnhancedTCRGates(executor *gateExecutor, enhancedActivities *Enhance
 	}
 
 	// GATE 5: VerifyGREEN - Tests Must Pass
-	if err := executor.executeGate("VerifyGREEN", enhancedActivities.ExecuteVerifyGREEN, bootstrap); err != nil {
+	if err := executor.executeGate("VerifyGREEN", enhancedActivities.ExecuteVerifyGREEN, bootstrap, input.TaskID); err != nil {
 		return err
 	}
 

@@ -269,20 +269,23 @@ func (ea *EnhancedActivities) ExecuteLintTest(ctx context.Context, bootstrap *Bo
 }
 
 // ExecuteVerifyRED - Gate 3: Verify tests fail (RED phase)
-func (ea *EnhancedActivities) ExecuteVerifyRED(ctx context.Context, bootstrap *BootstrapOutput) (*GateResult, error) {
+func (ea *EnhancedActivities) ExecuteVerifyRED(ctx context.Context, bootstrap *BootstrapOutput, taskID string) (*GateResult, error) {
 	ctx, span := telemetry.StartSpan(ctx, "activity.enhanced", "ExecuteVerifyRED")
 	defer span.End()
 
 	logger := activity.GetLogger(ctx)
-	logger.Info("Gate: VerifyRED")
+	logger.Info("Gate: VerifyRED", "taskID", taskID)
 
 	startTime := time.Now()
 	telemetry.AddEvent(ctx, "gate.start", telemetry.AttrGateName.String("verify_red"))
 	cellActivities := NewCellActivities()
 	cell := cellActivities.reconstructCell(bootstrap)
 
-	// Run tests - they SHOULD fail
-	result, _ := cell.Client.ExecuteCommand(ctx, "", "shell", []string{"go", "test", "-v", "./..."})
+	// Run tests ONLY for the task-specific test file
+	// This ensures we're testing just the newly created tests, not all 32+ test files in the repo
+	testPattern := fmt.Sprintf("./pkg/%s/...", strings.ToLower(taskID))
+	logger.Info("Running task-specific tests", "pattern", testPattern)
+	result, _ := cell.Client.ExecuteCommand(ctx, "", "shell", []string{"go", "test", "-v", testPattern})
 	output := ""
 	if result != nil {
 		output = result.GetText()
@@ -450,20 +453,23 @@ Requirements:
 }
 
 // ExecuteVerifyGREEN - Gate 5: Verify tests pass (GREEN phase)
-func (ea *EnhancedActivities) ExecuteVerifyGREEN(ctx context.Context, bootstrap *BootstrapOutput) (*GateResult, error) {
+func (ea *EnhancedActivities) ExecuteVerifyGREEN(ctx context.Context, bootstrap *BootstrapOutput, taskID string) (*GateResult, error) {
 	ctx, span := telemetry.StartSpan(ctx, "activity.enhanced", "ExecuteVerifyGREEN")
 	defer span.End()
 
 	logger := activity.GetLogger(ctx)
-	logger.Info("Gate: VerifyGREEN")
+	logger.Info("Gate: VerifyGREEN", "taskID", taskID)
 
 	startTime := time.Now()
 	telemetry.AddEvent(ctx, "gate.start", telemetry.AttrGateName.String("verify_green"))
 	cellActivities := NewCellActivities()
 	cell := cellActivities.reconstructCell(bootstrap)
 
-	// Run tests - they SHOULD pass
-	result, err := cell.Client.ExecuteCommand(ctx, "", "shell", []string{"go", "test", "-v", "./..."})
+	// Run tests ONLY for the task-specific test file
+	// This ensures we're testing just the newly created tests, not all 32+ test files in the repo
+	testPattern := fmt.Sprintf("./pkg/%s/...", strings.ToLower(taskID))
+	logger.Info("Running task-specific tests", "pattern", testPattern)
+	result, err := cell.Client.ExecuteCommand(ctx, "", "shell", []string{"go", "test", "-v", testPattern})
 	output := ""
 	if result != nil {
 		output = result.GetText()
