@@ -162,7 +162,7 @@ Requirements:
 	result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 		Title: fmt.Sprintf("GenTest: %s", taskID),
 		Agent: "test-generator",
-		Model: "github-copilot/claude-haiku-4.5",
+		Model: "anthropic/claude-haiku-4-5",
 	})
 
 	if err != nil {
@@ -191,7 +191,7 @@ Requirements:
 		AgentResults: []AgentResult{
 			{
 				AgentName:    "test-generator",
-				Model:        "github-copilot/claude-haiku-4.5",
+				Model:        "anthropic/claude-haiku-4-5",
 				Prompt:       prompt,
 				Response:     result.GetText(),
 				Success:      true,
@@ -396,7 +396,7 @@ Requirements:
 	result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 		Title: fmt.Sprintf("GenImpl: %s", taskID),
 		Agent: "implementation",
-		Model: "github-copilot/claude-haiku-4.5",
+		Model: "anthropic/claude-haiku-4-5",
 	})
 
 	if err != nil {
@@ -425,7 +425,7 @@ Requirements:
 		AgentResults: []AgentResult{
 			{
 				AgentName:    "implementation",
-				Model:        "github-copilot/claude-haiku-4.5",
+				Model:        "anthropic/claude-haiku-4-5",
 				Prompt:       prompt,
 				Response:     result.GetText(),
 				Success:      true,
@@ -555,7 +555,7 @@ Your review should focus on: %s`, taskID, description, reviewType, getReviewFocu
 		result, err := cell.Client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
 			Title: fmt.Sprintf("Review %d (%s): %s", i+1, reviewType, taskID),
 			Agent: getReviewerAgent(reviewType),
-			Model: "github-copilot/claude-haiku-4.5",
+			Model: "anthropic/claude-haiku-4-5",
 		})
 
 		var vote VoteResult

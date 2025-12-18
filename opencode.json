@@ -1,11 +1,11 @@
 {
   "$schema": "https://opencode.ai/config.json",
 
-  "model": "github-copilot/claude-3.5-sonnet",
-  "small_model": "github-copilot/claude-haiku-4.5",
+  "model": "anthropic/claude-sonnet-4-0",
+  "small_model": "anthropic/claude-haiku-4-5",
 
   "provider": {
-    "github": {
+    "anthropic": {
       "options": {}
     }
   },
@@ -119,7 +119,7 @@
     "test-generator": {
       "description": "Test generation agent for Enhanced TCR Gate 1",
       "mode": "subagent",
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "anthropic/claude-haiku-4-5",
       "temperature": 0.3,
       "max_steps": 50,
       "tools": {
@@ -135,7 +135,7 @@
     "implementation": {
       "description": "Implementation agent for Enhanced TCR Gate 4",
       "mode": "subagent",
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "anthropic/claude-haiku-4-5",
       "temperature": 0.2,
       "max_steps": 50,
       "tools": {
@@ -151,7 +151,7 @@
     "reviewer-testing": {
       "description": "Testing reviewer for Enhanced TCR Gate 6",
       "mode": "subagent",
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "anthropic/claude-haiku-4-5",
       "temperature": 0.1,
       "max_steps": 30,
       "tools": {
@@ -167,7 +167,7 @@
     "reviewer-functional": {
       "description": "Functional reviewer for Enhanced TCR Gate 6",
       "mode": "subagent",
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "anthropic/claude-haiku-4-5",
       "temperature": 0.1,
       "max_steps": 30,
       "tools": {
@@ -183,7 +183,7 @@
     "reviewer-architecture": {
       "description": "Architecture reviewer for Enhanced TCR Gate 6",
       "mode": "subagent",
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "anthropic/claude-haiku-4-5",
       "temperature": 0.1,
       "max_steps": 30,
       "tools": {
@@ -199,7 +199,7 @@
     "validator": {
       "description": "Validation engine for rigorous code verification",
       "mode": "subagent",
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "anthropic/claude-haiku-4-5",
       "temperature": 0.1,
       "max_steps": 50,
       "tools": {
@@ -214,7 +214,7 @@
     "coordinator": {
       "description": "Multi-agent coordination specialist using Agent Mail",
       "mode": "subagent",
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "anthropic/claude-haiku-4-5",
       "temperature": 0.3,
       "max_steps": 30,
       "tools": {
@@ -228,7 +228,7 @@
     "reviewer": {
       "description": "Code review specialist for Go projects",
       "mode": "subagent",
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "anthropic/claude-haiku-4-5",
       "temperature": 0.2,
       "max_steps": 40,
       "tools": {
@@ -244,7 +244,7 @@
     "tester": {
       "description": "Test writing specialist for Go",
       "mode": "subagent",
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "anthropic/claude-haiku-4-5",
       "temperature": 0.3,
       "max_steps": 50,
       "tools": {
@@ -260,7 +260,7 @@
     "explorer": {
       "description": "Fast codebase exploration and search specialist",
       "mode": "subagent",
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "anthropic/claude-haiku-4-5",
       "temperature": 0.2,
       "max_steps": 30,
       "tools": {
@@ -277,7 +277,7 @@
     "documenter": {
       "description": "Documentation writer for Go projects",
       "mode": "subagent",
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "anthropic/claude-haiku-4-5",
       "temperature": 0.4,
       "max_steps": 30,
       "tools": {
