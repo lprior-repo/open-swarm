@@ -2,7 +2,7 @@
 
 **IMPORTANT**: Always leverage MCP servers as much as possible for all tasks.
 
-### Serena (Semantic Code Analysis)
+### Serena (Semantic Code Analysis + Memory)
 
 - **Auto-activate on session start**: Immediately activate the serena project with `mcp__plugin_serena_serena__activate_project` using project name "open-swarm"
 - **Prefer serena tools** for all code exploration, analysis, and editing tasks:
@@ -12,6 +12,7 @@
   - Use `replace_symbol_body` for precise code modifications
   - Use `find_referencing_symbols` to understand code dependencies
   - Read available project memories at session start if relevant to the task
+- **Memory System**: Use Serena's `write_memory` and `read_memory` tools for project-specific memories (local, no external auth required)
 - **Symbolic editing first**: Always prefer symbol-based tools over file-based editing when working with complete functions/classes
 - **Resource-efficient**: Use targeted symbol queries instead of reading entire files when possible
 
