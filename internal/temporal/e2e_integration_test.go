@@ -81,8 +81,9 @@ func TestEnhancedTCR_HappyPath(t *testing.T) {
 	require.Equal(t, 6, len(result.GateResults), "should have 6 gate results")
 }
 
-// TestEnhancedTCR_Gate2LintRetry tests Gate 2 (LintTest) failure and retry
-func TestEnhancedTCR_Gate2LintRetry(t *testing.T) {
+// TestEnhancedTCR_Gate2LintFailure tests Gate 2 (LintTest) failure causes immediate revert
+// Note: Gates 1-3 (test generation phase) don't retry - they're foundational
+func TestEnhancedTCR_Gate2LintFailure(t *testing.T) {
 	ts := &testsuite.WorkflowTestSuite{}
 	env := ts.NewTestWorkflowEnvironment()
 
@@ -100,36 +101,13 @@ func TestEnhancedTCR_Gate2LintRetry(t *testing.T) {
 	env.OnActivity(enhancedActivities.ExecuteGenTest, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(
 		&GateResult{GateName: "GenTest", Passed: true}, nil)
 
-	// LintTest fails, then passes on retry
-	lint1Pass := false
-	env.OnActivity(enhancedActivities.ExecuteLintTest, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
-		lint1Pass = true
-	}).Return(&GateResult{
-		GateName: "LintTest",
-		Passed:   false,
-		Error:    "lint errors found",
-	}, nil)
-
-	env.OnActivity(enhancedActivities.ExecuteGenTest, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(
-		&GateResult{GateName: "GenTest", Passed: true}, nil)
-
-	// Retry: GenTest passes again, LintTest passes
+	// LintTest fails - no retry for foundational gates
 	env.OnActivity(enhancedActivities.ExecuteLintTest, mock.Anything, mock.Anything).Return(
-		&GateResult{GateName: "LintTest", Passed: true}, nil)
-
-	env.OnActivity(enhancedActivities.ExecuteVerifyRED, mock.Anything, mock.Anything, mock.Anything).Return(
-		&GateResult{GateName: "VerifyRED", Passed: true}, nil)
-
-	env.OnActivity(enhancedActivities.ExecuteGenImpl, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(
-		&GateResult{GateName: "GenImpl", Passed: true}, nil)
-
-	env.OnActivity(enhancedActivities.ExecuteVerifyGREEN, mock.Anything, mock.Anything, mock.Anything).Return(
-		&GateResult{GateName: "VerifyGREEN", Passed: true}, nil)
-
-	env.OnActivity(enhancedActivities.ExecuteMultiReview, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(
-		&GateResult{GateName: "MultiReview", Passed: true}, nil)
-
-	env.OnActivity(cellActivities.CommitChanges, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		&GateResult{
+			GateName: "LintTest",
+			Passed:   false,
+			Error:    "lint errors found",
+		}, nil)
 
 	env.OnActivity(cellActivities.RevertChanges, mock.Anything, mock.Anything).Return(nil)
 
@@ -141,8 +119,8 @@ func TestEnhancedTCR_Gate2LintRetry(t *testing.T) {
 		TaskID:             "e2e-task-002",
 		CellID:             "e2e-cell-002",
 		Branch:             "main",
-		Description:        "E2E test: Gate 2 lint retry",
-		AcceptanceCriteria: "Gate 2 fails then passes after regeneration",
+		Description:        "E2E test: Gate 2 lint failure (foundational, no retry)",
+		AcceptanceCriteria: "Gate 2 fails and workflow reverts immediately",
 		MaxRetries:         2,
 		MaxFixAttempts:     5,
 	})
@@ -150,8 +128,8 @@ func TestEnhancedTCR_Gate2LintRetry(t *testing.T) {
 	require.True(t, env.IsWorkflowCompleted())
 	var result *EnhancedTCRResult
 	require.NoError(t, env.GetWorkflowResult(&result))
-	require.True(t, result.Success)
-	require.True(t, lint1Pass, "LintTest should have been called")
+	require.False(t, result.Success, "workflow should fail on Gate 2 failure")
+	require.NotEmpty(t, result.Error, "should have error message")
 }
 
 // TestEnhancedTCR_Gate5TestRetry tests Gate 5 (VerifyGREEN) failure and targeted fix
