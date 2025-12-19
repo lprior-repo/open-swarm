@@ -6,14 +6,13 @@
 package opencode
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"open-swarm/internal/agent"
 )
 
 // CodeGenerator provides a high-level interface for agents to generate code.
@@ -60,24 +59,35 @@ type GenerationResult struct {
 	FullOutput      string        // Full output from the generator
 }
 
-// DefaultCodeGenerator implements CodeGenerator with Claude AI integration
+// DefaultCodeGenerator implements CodeGenerator with OpenCode SDK for Claude/Copilot
 type DefaultCodeGenerator struct {
 	analyzer CodeAnalyzer
-	apiKey   string
-	apiURL   string
+	client   agent.ClientInterface
 }
 
-// NewCodeGenerator creates a new CodeGenerator with Claude AI support
+// NewCodeGenerator creates a new CodeGenerator with OpenCode SDK support
+// Uses OpenCode for authentication and model selection (Claude or Copilot)
 func NewCodeGenerator(analyzer CodeAnalyzer) CodeGenerator {
-	// Initialize from environment
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
-	apiURL := "https://api.anthropic.com/v1/messages"
-
+	// Note: Client is nil by default. Must be set via SetClient() for real code generation.
+	// This allows testing without OpenCode server running.
 	return &DefaultCodeGenerator{
 		analyzer: analyzer,
-		apiKey:   apiKey,
-		apiURL:   apiURL,
+		client:   nil,
 	}
+}
+
+// NewCodeGeneratorWithClient creates a CodeGenerator with an existing OpenCode client
+// Use this for production with real Claude/Copilot integration
+func NewCodeGeneratorWithClient(analyzer CodeAnalyzer, client agent.ClientInterface) CodeGenerator {
+	return &DefaultCodeGenerator{
+		analyzer: analyzer,
+		client:   client,
+	}
+}
+
+// SetClient sets or updates the OpenCode client for code generation
+func (g *DefaultCodeGenerator) SetClient(client agent.ClientInterface) {
+	g.client = client
 }
 
 // GenerateCode generates code based on a task description using Claude
@@ -101,8 +111,18 @@ func (g *DefaultCodeGenerator) GenerateCode(ctx context.Context, task *CodeGener
 	}
 
 	for attempts = 0; attempts < maxRetries; attempts++ {
-		// Call Claude API via HTTP
-		resp, err := g.callClaudeAPI(ctx, prompt)
+		var resp string
+		var err error
+
+		// Use OpenCode SDK if client is configured
+		if g.client != nil {
+			resp, err = g.generateViaOpenCode(ctx, prompt, task)
+		} else {
+			// Fallback to placeholder for testing without OpenCode server
+			resp = g.generatePlaceholder(prompt, task)
+			err = nil
+		}
+
 		if err != nil {
 			lastErr = err
 			continue
@@ -239,70 +259,65 @@ func max(a, b int) int {
 	return b
 }
 
-// callClaudeAPI makes an HTTP call to Claude API
-func (g *DefaultCodeGenerator) callClaudeAPI(ctx context.Context, prompt string) (string, error) {
-	// If no API key, return placeholder
-	if g.apiKey == "" {
-		return fmt.Sprintf("// Generated code (no API key configured)\n// Prompt: %s\npackage main\n", prompt), nil
+// generateViaOpenCode calls Claude/Copilot via OpenCode SDK
+// OpenCode SDK handles authentication automatically
+func (g *DefaultCodeGenerator) generateViaOpenCode(ctx context.Context, prompt string, task *CodeGenerationTask) (string, error) {
+	if g.client == nil {
+		return "", fmt.Errorf("OpenCode client not configured")
 	}
 
-	// Prepare request payload
-	payload := map[string]interface{}{
-		"model":      "claude-3-5-sonnet-20241022",
-		"max_tokens": 4096,
-		"messages": []map[string]string{
-			{
-				"role":    "user",
-				"content": prompt,
-			},
-		},
-	}
+	// Execute prompt via OpenCode SDK
+	// OpenCode handles model selection (Claude or Copilot) based on configuration
+	result, err := g.client.ExecutePrompt(ctx, prompt, &agent.PromptOptions{
+		Model: "claude-3-5-sonnet",
+		Title: task.Description,
+	})
 
-	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
+		return "", fmt.Errorf("OpenCode execution failed: %w", err)
 	}
 
-	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "POST", g.apiURL, bytes.NewReader(jsonPayload))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+	if result == nil || len(result.Parts) == 0 {
+		return "", fmt.Errorf("no output from OpenCode")
 	}
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", g.apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	// Make request
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to call API: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check status
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	// Parse response
-	var response map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	// Extract content
-	if content, ok := response["content"].([]interface{}); ok && len(content) > 0 {
-		if firstContent, ok := content[0].(map[string]interface{}); ok {
-			if text, ok := firstContent["text"].(string); ok {
-				return text, nil
-			}
+	// Extract text from first part of response
+	for _, part := range result.Parts {
+		if part.Type == "text" && part.Text != "" {
+			return part.Text, nil
 		}
 	}
 
 	return "", fmt.Errorf("no text content in response")
+}
+
+// generatePlaceholder generates placeholder code for testing
+// Used when OpenCode client is not configured (testing mode)
+func (g *DefaultCodeGenerator) generatePlaceholder(prompt string, task *CodeGenerationTask) string {
+	// Return realistic placeholder code based on language
+	ext := ".go"
+	if task.Language == "python" {
+		ext = ".py"
+	} else if task.Language == "typescript" || task.Language == "javascript" {
+		ext = ".ts"
+	} else if task.Language == "markdown" {
+		ext = ".md"
+	}
+
+	placeholder := fmt.Sprintf(`// filepath: generated%s
+// This is placeholder code generated in testing mode (no OpenCode client)
+// In production, use SetClient() or NewCodeGeneratorWithClient() with an OpenCode client
+// Task: %s
+// Requirements: %s
+
+package main
+
+func main() {
+	// TODO: Implement based on requirements
+}
+`, ext, task.Description, task.Requirements)
+
+	return placeholder
 }
 
 // extractFilesFromGeneration extracts file paths from generated code
