@@ -1,7 +1,7 @@
 {
-  "pid": 1665992,
-  "parent_pid": 1665963,
+  "pid": 1686541,
+  "parent_pid": 1686519,
   "database": "/home/lewis/src/open-swarm/.beads/beads.db",
   "version": "0.29.0",
-  "started_at": "2025-12-19T16:45:09.544900848Z"
+  "started_at": "2025-12-19T16:50:20.198071516Z"
 }
