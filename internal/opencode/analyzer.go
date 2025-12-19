@@ -7,6 +7,11 @@ package opencode
 
 import (
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"strings"
 )
 
 // CodeAnalyzer provides code analysis capabilities for agents.
@@ -112,10 +117,9 @@ type ComplexityMetrics struct {
 	Issues               string // Any complexity issues detected
 }
 
-// DefaultCodeAnalyzer implements CodeAnalyzer
+// DefaultCodeAnalyzer implements CodeAnalyzer using Go's ast package
 type DefaultCodeAnalyzer struct {
-	// Could use treesitter library here for actual parsing
-	// For now, this is a stub that agents can call
+	// Uses Go's built-in ast parser for code analysis
 }
 
 // NewCodeAnalyzer creates a new CodeAnalyzer
@@ -123,20 +127,119 @@ func NewCodeAnalyzer() CodeAnalyzer {
 	return &DefaultCodeAnalyzer{}
 }
 
-// AnalyzeFile analyzes a single file
+// AnalyzeFile analyzes a single Go file
 func (a *DefaultCodeAnalyzer) AnalyzeFile(ctx context.Context, filePath string) (*CodeAnalysis, error) {
-	// TODO: Integrate treesitter-go for actual parsing
-	// For now, return a stub implementation
+	// Read the file
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return &CodeAnalysis{
+			FilePath: filePath,
+			Language: "go",
+			IsValid:  false,
+			Issues: []SyntaxError{{
+				LineNumber: 0,
+				Column:     0,
+				Message:    "Failed to read file: " + err.Error(),
+			}},
+		}, nil
+	}
+
+	// Parse the file
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filePath, content, parser.AllErrors)
 
 	analysis := &CodeAnalysis{
 		FilePath:   filePath,
-		Language:   "unknown",
-		IsValid:    true,
+		Language:   "go",
 		Symbols:    []*Symbol{},
 		Imports:    []string{},
 		Issues:     []SyntaxError{},
 		Complexity: ComplexityMetrics{},
 	}
+
+	// If parsing failed, record syntax errors
+	if err != nil {
+		analysis.IsValid = false
+		analysis.Issues = append(analysis.Issues, SyntaxError{
+			LineNumber: 1,
+			Column:     0,
+			Message:    err.Error(),
+		})
+		return analysis, nil
+	}
+
+	analysis.IsValid = true
+
+	// Extract imports
+	for _, decl := range file.Decls {
+		if gen, ok := decl.(*ast.GenDecl); ok && gen.Tok == token.IMPORT {
+			for _, spec := range gen.Specs {
+				if ispec, ok := spec.(*ast.ImportSpec); ok {
+					path := strings.Trim(ispec.Path.Value, "\"")
+					analysis.Imports = append(analysis.Imports, path)
+				}
+			}
+		}
+	}
+
+	// Extract symbols
+	for _, decl := range file.Decls {
+		switch decl := decl.(type) {
+		case *ast.FuncDecl:
+			symbol := &Symbol{
+				Name:       decl.Name.Name,
+				Kind:       SymbolFunction,
+				FilePath:   filePath,
+				LineNumber: fset.Position(decl.Pos()).Line,
+				EndLine:    fset.Position(decl.End()).Line,
+				ReturnType: typeToString(decl.Type.Results),
+			}
+			if decl.Recv != nil {
+				symbol.Kind = SymbolMethod
+			}
+			analysis.Symbols = append(analysis.Symbols, symbol)
+
+		case *ast.GenDecl:
+			// Handle type declarations
+			if decl.Tok == token.TYPE {
+				for _, spec := range decl.Specs {
+					if tspec, ok := spec.(*ast.TypeSpec); ok {
+						symbol := &Symbol{
+							Name:       tspec.Name.Name,
+							Kind:       typeToSymbolKind(tspec.Type),
+							FilePath:   filePath,
+							LineNumber: fset.Position(tspec.Pos()).Line,
+							EndLine:    fset.Position(tspec.End()).Line,
+						}
+						analysis.Symbols = append(analysis.Symbols, symbol)
+					}
+				}
+			}
+			// Handle constants and variables
+			if decl.Tok == token.CONST || decl.Tok == token.VAR {
+				for _, spec := range decl.Specs {
+					if vspec, ok := spec.(*ast.ValueSpec); ok {
+						kind := SymbolVariable
+						if decl.Tok == token.CONST {
+							kind = SymbolConstant
+						}
+						for _, name := range vspec.Names {
+							analysis.Symbols = append(analysis.Symbols, &Symbol{
+								Name:       name.Name,
+								Kind:       kind,
+								FilePath:   filePath,
+								LineNumber: fset.Position(vspec.Pos()).Line,
+								EndLine:    fset.Position(vspec.End()).Line,
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Calculate complexity metrics
+	analysis.Complexity = calculateComplexity(file, content)
 
 	return analysis, nil
 }
@@ -162,24 +265,146 @@ func (a *DefaultCodeAnalyzer) AnalyzeFiles(ctx context.Context, filePaths []stri
 
 // FindSymbols finds symbols in a file
 func (a *DefaultCodeAnalyzer) FindSymbols(ctx context.Context, filePath string) ([]*Symbol, error) {
-	// TODO: Implement with treesitter
-	return []*Symbol{}, nil
+	analysis, err := a.AnalyzeFile(ctx, filePath)
+	if err != nil {
+		return nil, err
+	}
+	return analysis.Symbols, nil
 }
 
-// FindReferences finds uses of a symbol
+// FindReferences finds uses of a symbol (simplified implementation)
 func (a *DefaultCodeAnalyzer) FindReferences(ctx context.Context, filePath string, symbolName string) ([]*Reference, error) {
-	// TODO: Implement with treesitter
-	return []*Reference{}, nil
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	lines := strings.Split(string(content), "\n")
+	var references []*Reference
+
+	for lineNum, line := range lines {
+		if strings.Contains(line, symbolName) {
+			// Find column position
+			col := strings.Index(line, symbolName)
+			references = append(references, &Reference{
+				FilePath:   filePath,
+				LineNumber: lineNum + 1,
+				ColumnNum:  col,
+				Context:    strings.TrimSpace(line),
+			})
+		}
+	}
+
+	return references, nil
 }
 
 // ValidateSyntax validates code syntax
 func (a *DefaultCodeAnalyzer) ValidateSyntax(ctx context.Context, filePath string) (bool, []SyntaxError, error) {
-	// TODO: Implement with treesitter
-	return true, []SyntaxError{}, nil
+	analysis, err := a.AnalyzeFile(ctx, filePath)
+	if err != nil {
+		return false, nil, err
+	}
+	return analysis.IsValid, analysis.Issues, nil
 }
 
 // GetCodeComplexity calculates complexity metrics
 func (a *DefaultCodeAnalyzer) GetCodeComplexity(ctx context.Context, filePath string) (*ComplexityMetrics, error) {
-	// TODO: Implement with analysis
-	return &ComplexityMetrics{}, nil
+	analysis, err := a.AnalyzeFile(ctx, filePath)
+	if err != nil {
+		return nil, err
+	}
+	return &analysis.Complexity, nil
+}
+
+// Helper functions
+
+// typeToString converts a field list to a string representation
+func typeToString(fl *ast.FieldList) string {
+	if fl == nil || len(fl.List) == 0 {
+		return ""
+	}
+	var types []string
+	for _, field := range fl.List {
+		types = append(types, fieldTypeToString(field.Type))
+	}
+	return strings.Join(types, ", ")
+}
+
+// fieldTypeToString converts a type expression to string
+func fieldTypeToString(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.ArrayType:
+		return "[]" + fieldTypeToString(t.Elt)
+	case *ast.MapType:
+		return "map[" + fieldTypeToString(t.Key) + "]" + fieldTypeToString(t.Value)
+	case *ast.StarExpr:
+		return "*" + fieldTypeToString(t.X)
+	case *ast.SelectorExpr:
+		return fieldTypeToString(t.X) + "." + t.Sel.Name
+	default:
+		return "interface{}"
+	}
+}
+
+// typeToSymbolKind determines the symbol kind from a type expression
+func typeToSymbolKind(expr ast.Expr) SymbolKind {
+	switch expr.(type) {
+	case *ast.StructType:
+		return SymbolClass
+	case *ast.InterfaceType:
+		return SymbolInterface
+	default:
+		return SymbolType
+	}
+}
+
+// calculateComplexity calculates cyclomatic complexity and other metrics
+func calculateComplexity(file *ast.File, content []byte) ComplexityMetrics {
+	metrics := ComplexityMetrics{
+		LinesOfCode:         len(strings.Split(string(content), "\n")),
+		Functions:           0,
+		CyclomaticComplexity: 1, // Base complexity is 1
+		AverageFunctionSize:  0,
+		NestedDepth:          0,
+	}
+
+	// Count functions and accumulate complexity
+	totalFunctionLines := 0
+	for _, decl := range file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			metrics.Functions++
+			fnStart := file.Pos() - fn.Pos()
+			fnEnd := fn.End() - fn.Pos()
+			fnLines := fnEnd - fnStart
+			totalFunctionLines += int(fnLines)
+
+			// Add cyclomatic complexity for this function
+			metrics.CyclomaticComplexity += countComplexity(fn.Body)
+		}
+	}
+
+	if metrics.Functions > 0 {
+		metrics.AverageFunctionSize = totalFunctionLines / metrics.Functions
+	}
+
+	return metrics
+}
+
+// countComplexity counts decision points (cyclomatic complexity)
+func countComplexity(node ast.Node) int {
+	if node == nil {
+		return 0
+	}
+
+	complexity := 0
+	ast.Inspect(node, func(n ast.Node) bool {
+		switch n.(type) {
+		case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt, *ast.CaseClause:
+			complexity++
+		}
+		return true
+	})
+	return complexity
 }
